@@ -3,8 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+*.pyc
+*.pkl
+*.html
+events.out.*
+*.pth
 # C extensions
 *.so
+environments/
 
 # Distribution / packaging
 .Python
@@ -160,3 +166,6 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+experiments*/
+data*/
