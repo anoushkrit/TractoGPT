@@ -1,0 +1,11 @@
+NAME: StreamlinePatchKnn
+# path: /scratch/jankita.scee.iitmandi/TractCloud/TrainData_800clu800ol/
+# path: /neuro/tractcloud-data/TrainData_800clu800ol/
+path: /scratch/anoushkrit.scee.iitmandi/TractoBERT/data
+n_local_neighbours: 4 # this will find total neighbours, but model might not use all of them
+points_per_streamline: 256
+# subset: train
+# batch_size: 128 
+# n_workers: 20
+# gpu: cuda:0
+

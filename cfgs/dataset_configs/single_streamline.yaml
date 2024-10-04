@@ -1,0 +1,10 @@
+NAME: single_streamline
+path: /scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP
+
+# subset: train
+points_per_streamline: 256
+pts_per_sample: 256
+samples_per_class: 150
+sample_per_subject: 10000
+num_samples_per_class_per_batch: 10
+label_mapping_path: label_int_mapping.json
