@@ -22,7 +22,7 @@ from utils.config import *
 import gc, pickle
 from dipy.tracking.streamline import select_random_set_of_streamlines
 import copy
-# from .build import DATASETS
+from .build import DATASETS
 
 
 def load_stream(trk_path):
@@ -69,17 +69,16 @@ def choose_upORdownsample(args):
         return interp_streamline((streamline, pts))
     else:
         return downsample((streamline, pts))
-def FSS(streamlines, args):
-    main_streamline_idx, radius, indices = args
-    main_streamline = [streamlines[main_streamline_idx]]
-    ref_streamlines = [streamlines[i] for i in indices]
-    fs_tree_af = FastStreamlineSearch(ref_streamlines=ref_streamlines, max_radius=radius)
+
+def FSS(args):
+    streamlines, main_streamline, radius, indices = args
+    fs_tree_af = FastStreamlineSearch(ref_streamlines=streamlines, max_radius=radius)
     coo_mdist_mtx = fs_tree_af.radius_search(main_streamline, radius=radius)
     ids_ref = np.unique(coo_mdist_mtx.col) 
     ids_ref = [indices[i] for i in ids_ref]
     return ids_ref
 
-# @DATASETS.register_module()
+@DATASETS.register_module()
 class s3FSSknnTrInF(Dataset):
     def __init__(self, config):
         self.config = config
@@ -97,9 +96,16 @@ class s3FSSknnTrInF(Dataset):
         self.label_mapping_path = config.label_mapping_path
         self.local_streamline_threshold_count = config.local_streamline_threshold_count
         self.use_resampled_streamline = config.use_resampled_streamline
+        self.custom_batch = config.custom_batch
+        if self.subset == 'testset':
+            self.custom_batch = False
+        if self.subset == 'validset':
+            self.custom_batch = False
+            self.sample_per_subject = 10000
+            self.samples_per_class = 150
 
-        print('Processing dataTrInF for :',self.subset)
-        self.batch_root_path = f'dataTrInF/s3FSSknn/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/batches{self.FSSradius}{self.num_local_neighbours}{self.local_streamline_threshold_count}'
+        print('Processing data/dataTrInF for :',self.subset)
+        self.batch_root_path = f'data/dataTrInF/s3FSSknn/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/batches{self.FSSradius}{self.num_local_neighbours}{self.local_streamline_threshold_count}'
         if not os.path.exists(self.batch_root_path):
             os.makedirs(self.batch_root_path)
         
@@ -110,7 +116,7 @@ class s3FSSknnTrInF(Dataset):
             with open(self.label_mapping_path,'r') as f:
                 self.label_int_mapping = json.load(f)
 
-        root_path = 'dataTrInF/s3FSSknn/'
+        root_path = 'data/dataTrInF/s3FSSknn/'
         self.root_path = root_path
         if not os.path.exists(root_path):
             os.makedirs(root_path)
@@ -125,7 +131,7 @@ class s3FSSknnTrInF(Dataset):
             path = f'{root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl'
             self.labels = self.loadORprocess(path, self.load_streamlines_mp, title='labels')
         path = f'{root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl'
-        # self.resampled_streamlines = self.loadORprocess(path, self.fix_pts_in_streamlines, title='resampledStreamlines')
+        self.resampled_streamlines = self.loadORprocess(path, self.fix_pts_in_streamlines, title='resampledStreamlines')
         path = f'{root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/FSSidx/FSSradius{self.FSSradius}.pkl'
         self.FSS_indices = self.loadORprocess(path, self.apply_FSS, title = 'FSSidx')
         path = f'{root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/FSSidx/ommitedIdx_FSSradius{self.FSSradius}/ommitedIdx_{self.local_streamline_threshold_count}.pkl'
@@ -136,9 +142,12 @@ class s3FSSknnTrInF(Dataset):
         print('batching start : ', datetime.datetime.now())
         self.omitted_streamlines = np.concatenate((self.omitted_streamlines,np.where(self.labels=='CC')[0]))
         self.omitted_streamlines = np.concatenate((self.omitted_streamlines,np.where(self.labels=='CC_0')[0]))
-        self.create_custom_batch()
+        if self.custom_batch:
+            self.create_custom_batch()
         self.itr_count = 0
 
+        temp = np.arange(len(self.labels))
+        self.non_ommitted_streamline = temp[~np.isin(temp, self.omitted_streamlines)]
         print('end : ', datetime.datetime.now())
 
     def loadORprocess(self, path, process_func, title):
@@ -146,13 +155,13 @@ class s3FSSknnTrInF(Dataset):
             dirname = os.path.dirname(path)
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
-            print('Processing dataTrInF of :',title)
-            dataTrInF = process_func()
+            print('Processing data/dataTrInF of :',title)
+            data = process_func()
         else:
-            print('Loading processed dataTrInF for :',title, path)
+            print('Loading processed data/dataTrInF for :',title, path)
             with open(path, 'rb') as f:
-                dataTrInF = pickle.load(f)
-        return dataTrInF
+                data = pickle.load(f)
+        return data
     def update_count_on_ommitted_streamlines(self, original_label, original_count):
         new_temp = self.labels[self.omitted_streamlines]
         ommited_labels, ommited_count = np.unique(new_temp, return_counts=True)
@@ -220,7 +229,7 @@ class s3FSSknnTrInF(Dataset):
             streamlines = [streamlines[i] for i in np.random.choice(len(streamlines), sample_per_subject, replace=False)]
 
         labels = [streamline_to_class[str(streamline)] for streamline in streamlines]
-        
+        del streamline_to_class
         return subject_id, streamlines, labels
 
     def load_streamlines_mp(self):
@@ -317,16 +326,19 @@ class s3FSSknnTrInF(Dataset):
         FSS_indices = [0]*len(self.streamlines)
         for subject_id in tqdm(np.unique(self.subject_ids)):
             batch_indices = np.where(self.subject_ids == subject_id)[0]
-            inp = [(batch_indices[i], self.FSSradius, batch_indices) for i in range(len(batch_indices))]
-            print(subject_id)
-            
-            # Pass the streamlines explicitly to the static method for multiprocessing
+            inp = [([self.streamlines[i] for i in batch_indices],
+                    [self.streamlines[batch_indices[i]]],
+                    self.FSSradius, batch_indices) for i in range(len(batch_indices))]
             with Pool() as pool:
-                FSS_subject_indices = pool.starmap(FSS, [(self.streamlines, x) for x in inp])
-            
+                FSS_subject_indices = pool.map(FSS, inp)
             for i in range(len(batch_indices)):
                 FSS_indices[batch_indices[i]] = FSS_subject_indices[i]
+            
+            del inp
+            del batch_indices
+            del FSS_subject_indices
 
+        del self.streamlines
         with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/FSSidx/FSSradius{self.FSSradius}.pkl', 'wb') as f:    
             pickle.dump(FSS_indices, f)
 
@@ -380,7 +392,14 @@ class s3FSSknnTrInF(Dataset):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]
         return np.array(int_labels)
     def __getitem__(self,index):
-        # if self.subset == 'train':
+        if not self.custom_batch:
+            index = self.non_ommitted_streamline[index]
+            if index in self.omitted_streamlines:
+                print('why is it here')
+            chf_idx = self.chamfer_indices[index]
+            club_streamlines = self.concat_streamlines(chf_idx)
+            club_streamlines = self.pc_norm(club_streamlines)
+            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [0], torch.from_numpy(club_streamlines.astype(np.float32))
         self.itr_count+=1
         with open(f'{self.batch_root_path}/custom_batches_{self.batch_size}/batch_{index}.pkl', 'rb') as f:
             batch_streamlines_indices, batch_labels = pickle.load(f)
@@ -403,14 +422,16 @@ class s3FSSknnTrInF(Dataset):
         #     return mapped_label, [0], torch.from_numpy(self.pc_norm(pc).astype(np.float32))
             # return mapped_labels, batch_pc
     def __len__(self):
+        if not self.custom_batch:
+            return len(self.non_ommitted_streamline)
         return self.num_batches
         # else:
         #     return min(5000,len(self.streamlines) - len(self.omitted_streamlines))
         # return self.num_batches
     
 #%%
-config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/s3FSSknnTrInF.yaml')
-x = s3FSSknnTrInF(config)
+# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/s3FSSknnTrInF.yaml')
+# x = s3FSSknnTrInF(config)
 # #%%
 # a,b,_,_,_,_,_ = x[0]
 # # %%

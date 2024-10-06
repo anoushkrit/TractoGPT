@@ -1,14 +1,15 @@
 NAME: s3FSSknnTrInF
 path: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives
-subset: validset
+# subset: trainset
 points_per_streamline: 32
 num_local_neighbours: 65 # gives approx 1024 points 
 FSSradius: 6 # FSS on 7mm works better on select random streamlines
-samples_per_class: 10000
-sample_per_subject: 300000
-num_samples_per_class_per_batch: 1
+samples_per_class: 1000
+sample_per_subject: 40000
+num_samples_per_class_per_batch: 8
 pts_per_sample: 1024
 debug_mode: False
 label_mapping_path: label_int_mapping_TrInF.json
-local_streamline_threshold_count: 10 
+local_streamline_threshold_count: 1 
 use_resampled_streamline: False
+custom_batch: False

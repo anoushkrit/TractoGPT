@@ -6,25 +6,25 @@ dataset:
   {
     train:
       {
-        _base_: cfgs/dataset_configs/single_streamline.yaml,
-        others: { subset: "train", npoints: 256 },
+        _base_: cfgs/dataset_configs/s3FSSknnTrInF.yaml,
+        others: { subset: "trainset", npoints: 1024 },
       },
     val:
       {
-        _base_: cfgs/dataset_configs/single_streamline.yaml,
-        others: { subset: "val", npoints: 256 },
+        _base_: cfgs/dataset_configs/s3FSSknnTrInF.yaml,
+        others: { subset: "validset", npoints: 1024 },
       },
     test:
       {
-        _base_: cfgs/dataset_configs/single_streamline.yaml,
-        others: { subset: "test", npoints: 256 },
+        _base_: cfgs/dataset_configs/s3FSSknnTrInF.yaml,
+        others: { subset: "testset", npoints: 1024 },
       },
   }
 
 model:
   {
     NAME: PointGPT,
-    cls_dim: 71,
+    cls_dim: 32,
     group_size: 16,
     num_group: 64,
     loss: cdl12,
@@ -43,7 +43,7 @@ model:
       },
   }
 
-npoints: 256
+npoints: 1024
 total_bs: 1
 step_per_update: 1
 max_epoch: 300

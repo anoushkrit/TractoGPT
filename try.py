@@ -12,7 +12,7 @@ with open ('test_pred.pkl', 'rb') as f:
 # # Sample data (replace these with your actual labels)
 # true_labels = np.random.choice(['label1', 'label2', 'label3', 'label4', 'label5'], size=100)
 # predicted_labels = np.random.choice(['label1', 'label2', 'label3', 'label4', 'label5'], size=100)
-with open ('label_int_mapping.json', 'rb') as f:
+with open ('label_int_mapping_TrInF.json', 'rb') as f:
     label_int_mapping = json.load(f)
 int_label_mapping = {v: k for k, v in label_int_mapping.items()}
 
@@ -33,4 +33,4 @@ plt.title('Confusion Matrix')
 plt.xticks(rotation=90, ha='right')  # Rotate labels for better readability
 plt.yticks(rotation=0)  # Keep y-labels horizontal
 plt.tight_layout()  # Adjust layout to prevent clipping
-plt.show()
+plt.savefig('plot.png')

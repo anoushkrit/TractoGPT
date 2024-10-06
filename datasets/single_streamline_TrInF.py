@@ -112,9 +112,12 @@ class single_streamline_TrInF(Dataset):
         self.num_samples_per_class_per_batch = config.num_samples_per_class_per_batch
         self.pts_per_sample = config.pts_per_sample
         self.label_mapping_path = config.label_mapping_path
+        self.custom_batch = config.custom_batch 
+        if self.subset == 'testset':
+            self.custom_batch = False
 
-        print('Processing dataTrInF for :',self.subset)
-        self.batch_root_path = f'dataTrInF/single_streamline/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/batches{self.points_per_streamline}'
+        print('Processing data/dataTrInF for :',self.subset)
+        self.batch_root_path = f'data/dataTrInF/single_streamline/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/batches{self.points_per_streamline}'
         if not os.path.exists(self.batch_root_path):
             os.makedirs(self.batch_root_path)
         
@@ -124,29 +127,25 @@ class single_streamline_TrInF(Dataset):
             with open(self.label_mapping_path,'r') as f:
                 self.label_int_mapping = json.load(f)
 
-        self.root_path = 'dataTrInF/single_streamline'
+        self.root_path = 'data/dataTrInF/single_streamline'
 
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl'
         if not os.path.exists(path):
             self.load_streamlines_mp()
         else:
             self.streamlines = self.loadORprocess(path, self.load_streamlines_mp, title='streamlines')
-        streamline_copy = copy.deepcopy(self.streamlines)
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/subjectIds.pkl'
         self.subject_ids = self.loadORprocess(path, self.load_streamlines_mp, title='subjectIds')
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl'
         self.labels = self.loadORprocess(path, self.load_streamlines_mp, title='labels')
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl'
         self.resampled_streamlines = self.loadORprocess(path, self.fix_pts_in_streamlines, title='resampledStreamlines')
-        for i in range(len(self.streamlines)):
-            for j in range(len(self.streamlines[i])):
-                for k in range(len(self.streamlines[i][j])):
-                    if(self.streamlines[i][j][k]!=streamline_copy[i][j][k]):
-                        print('error')
-        print('batching start : ', datetime.datetime.now())
-        self.create_custom_batch()
-        self.itr_count = 0
 
+        if self.custom_batch:
+            print('batching')
+            self.create_custom_batch()
+        
+        self.itr_count = 0
         print('end : ', datetime.datetime.now())
 
     def loadORprocess(self, path, process_func, title):
@@ -155,13 +154,13 @@ class single_streamline_TrInF(Dataset):
             dirname = os.path.dirname(path)
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
-            print('Processing dataTrInF of :',title)
-            dataTrInF = process_func()
+            print('Processing data/dataTrInF of :',title)
+            data = process_func()
         else:
-            print('Loading processed dataTrInF for :',title, path)
+            print('Loading processed data/dataTrInF for :',title, path)
             with open(path, 'rb') as f:
-                dataTrInF = pickle.load(f)
-        return dataTrInF
+                data = pickle.load(f)
+        return data
     
     def create_custom_batch(self):
         # stratified sampler
@@ -276,7 +275,7 @@ class single_streamline_TrInF(Dataset):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]
         return np.array(int_labels)
     def __getitem__(self,index):
-        if self.subset == 'testset':
+        if not self.custom_batch:
             return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [0], torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
         self.itr_count+=1
         with open(f'{self.batch_root_path}/custom_batches_{self.batch_size}/batch_{index}.pkl', 'rb') as f:
@@ -293,7 +292,7 @@ class single_streamline_TrInF(Dataset):
         return torch.from_numpy(mapped_labels[shuffle_batch]), [0] ,torch.from_numpy(batch_pc[shuffle_batch].astype(np.float32)) 
         # return self.streamlines, self.resampled_streamlines, self.labels
     def __len__(self):
-        if self.subset == 'testset':
+        if not self.custom_batch:
             return len(self.labels)
         return self.num_batches
     

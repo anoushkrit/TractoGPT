@@ -58,6 +58,7 @@ class Acc_Metric:
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
     # build dataset
+    config.dataset.val.others.bs = 512
     (train_sampler, train_dataloader), (_, test_dataloader), = builder.dataset_builder(args, config.dataset.train), \
         builder.dataset_builder(args, config.dataset.val)
     # build model
@@ -126,7 +127,10 @@ def run_net(args, config, train_writer=None, val_writer=None):
             dataset_name = config.dataset.train._base_.NAME
             data_time.update(time.time() - batch_start_time)
             
-            if dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
+            if config.total_bs > 1:
+                points = data.cuda()
+                label = taxonomy_ids.cuda()
+            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
                 points = data.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':
@@ -180,8 +184,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
             else:
                 loss, acc = base_model.module.get_loss_acc(ret, label, class_feat)
 
-            # _loss = loss + 3 * loss1
-            _loss = loss + 2 * loss1
+            _loss = loss + 3 * loss1
+            # _loss = loss + 2 * loss1
             # _loss = loss + loss1
 
             try:
@@ -284,7 +288,11 @@ def validate(base_model, test_dataloader, epoch, val_writer, args, config, logge
     with torch.no_grad():
         for idx, (taxonomy_ids, extra_info, data) in enumerate(test_dataloader):
             dataset_name = config.dataset.train._base_.NAME
-            if dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnLRC' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
+            
+            if 1:
+                points = data.cuda()
+                label = taxonomy_ids.cuda()
+            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnLRC' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
                 points = data.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':
@@ -349,7 +357,11 @@ def validate_vote(base_model, test_dataloader, epoch, val_writer, args, config, 
     with torch.no_grad():
         for idx, (taxonomy_ids, extra_info, data) in enumerate(test_dataloader):
             dataset_name = config.dataset.train._base_.NAME
-            if dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
+
+            if 1:
+                points = data.cuda()
+                label = taxonomy_ids.cuda()
+            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
                 points = data.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':
@@ -458,7 +470,6 @@ def test(base_model, test_dataloader, args, config, logger=None):
         label_int_mapping = json.load(f)
 
     int_label_mapping = {int(value): key for key, value in label_int_mapping.items()}
-    print(int_label_mapping)
 
     base_model.eval()  # set model to eval mode
 
@@ -469,7 +480,10 @@ def test(base_model, test_dataloader, args, config, logger=None):
     with torch.no_grad():
         for idx, (taxonomy_ids, extra_info, data) in enumerate(test_dataloader):
             dataset_name = config.dataset.train._base_.NAME
-            if dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF':
+            if config.total_bs > 1:
+                points = data.cuda()
+                label = taxonomy_ids.cuda()
+            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
                 points = data.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':

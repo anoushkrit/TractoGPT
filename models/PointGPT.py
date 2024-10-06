@@ -702,6 +702,7 @@ class PointTransformer(nn.Module):
         elif loss_type == 'cdl12':
             self.loss_func_p1 = ChamferDistanceL1().cuda()
             self.loss_func_p2 = ChamferDistanceL2().cuda()
+            print('cdl12')
         else:
             raise NotImplementedError
         self.loss_ce = nn.CrossEntropyLoss()
@@ -820,13 +821,54 @@ class PointTransformer(nn.Module):
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
     
+
+    def plot_3d_scatter(self,pts):
+        """
+        Takes a tensor of shape (1, 24, 3) on CUDA, moves it to CPU, and creates a 3D scatter plot.
+        
+        Parameters:
+            pts (torch.Tensor): Input tensor of shape (1, 24, 3) on CUDA.
+            
+        Returns:
+            None
+        """
+        # Move tensor to CPU and convert to NumPy
+        points_np = pts.cpu().numpy().squeeze()  # Shape becomes (24, 3)
+        
+        # Extract x, y, z coordinates
+        x, y, z = points_np[:, 0], points_np[:, 1], points_np[:, 2]
+        
+        # Create 3D scatter plot using Plotly
+        scatter = go.Scatter3d(
+            x=x, y=y, z=z,
+            mode='markers',
+            marker=dict(
+                size=5,
+                color=z,  # Color points based on z-axis values
+                colorscale='Viridis',
+                opacity=0.8
+            )
+        )
+
+        layout = go.Layout(
+            scene=dict(
+                xaxis_title='X',
+                yaxis_title='Y',
+                zaxis_title='Z'
+            ),
+            title='3D Scatter Plot'
+        )
+
+        fig = go.Figure(data=[scatter], layout=layout)
+        i = np.random.choice(100,1)[0]
+        fig.write_html(f'3d_scatterplots/{i}.html')
     def forward(self, pts):
         if self.cls_method == 'm1' or self.cls_method == 'm2' or self.cls_method == 'm3' or self.cls_method == 'm4':
             mainS, pts = pts
         
         neighborhood, center = self.group_divider(pts)
         group_input_tokens = self.encoder(neighborhood)  # B G N
-
+        # self.plot_3d_scatter(pts[0])
         B, L, _ = group_input_tokens.shape
 
         if self.cls_method == 'm1':
