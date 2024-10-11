@@ -130,7 +130,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             if config.total_bs > 1:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
+            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF' or dataset_name == 'neomethod':
                 points = data.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':
@@ -473,6 +473,7 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
     base_model.eval()  # set model to eval mode
 
+    raw_streamlines = []
     test_pred = []
     test_label = []
     npoints = config.npoints
@@ -513,6 +514,7 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
             pred = logits.argmax(-1).view(-1)
 
+            raw_streamlines.append(extra_info.detach())
             test_pred.append(pred.detach())
             test_label.append(target.detach())
 
@@ -524,10 +526,11 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
         test_pred = torch.cat(test_pred, dim=0)
         test_label = torch.cat(test_label, dim=0)
+        raw_streamlines = torch.cat(raw_streamlines, dim=0)
 
         import pickle 
         with open('test_pred.pkl', 'wb') as f:
-            pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy()), f)
+            pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines.cpu().numpy()), f)
         if args.distributed:
             test_pred = dist_utils.gather_tensor(test_pred, args)
             test_label = dist_utils.gather_tensor(test_label, args)

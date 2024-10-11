@@ -1,41 +1,38 @@
-#%%
+from utils.dice import *
 import pickle
-from dipy.io.streamline import load_tractogram
-
-def load_stream(trk_path):
-    bundle_track = load_tractogram(str(trk_path), 'same', bbox_valid_check=False)
-    try:
-        return list(bundle_track.streamlines)
-    except:
-        return []
-
-pth = '/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/sub-1049/tractography'
-
-#%%
-import os
-
-tot=0
-for cls in os.listdir(pth):
-    x = len(load_stream(os.path.join(pth,cls)))
-    tot+=x
-    # print(x)
-print(tot)
-    # print(cls)
-#%%
-import json
-
-pth = '/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/dataTrInF/single_streamline/streamlineData_trainset_150_10000/labels.pkl'
-import pickle
-with open(pth, 'rb') as f:
-    labels = pickle.load(f)
+from nibabel.streamlines.array_sequence import ArraySequence
 import numpy as np
-labels = np.array(labels)
-labels = np.unique(labels)
-labels = np.sort(labels)
+from dipy.io.streamline import load_tractogram
+import json
+from dipy.io.stateful_tractogram import StatefulTractogram, Space
+from utils.dice import hcp_scores
 
-dic = {}
-for i,lab in enumerate(labels):
-    dic[lab] = i
+with open('test_pred.pkl', 'rb') as f:
+    true_labels, predicted_labels, streamlines = pickle.load(f)
 
-with open('label_int_mapping_TrInF.json', 'w') as f:
-    json.dump(dic, f, indent=4)
+with open('label_int_mapping_TrInF.json', 'r') as f:
+    label_int_mapping = json.load(f)
+int_label_mapping = {int(v): k for k, v in label_int_mapping.items()}
+
+unique_labels = np.unique(true_labels)
+
+split = 'test'
+sub = 1047
+tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}set/sub-{sub}/tractography/sub-1047__AF_L.trk", "same", bbox_valid_check=False)
+for label in unique_labels:
+
+    true_streamlines = streamlines[true_labels == label].squeeze()
+    pred_streamlines = streamlines[predicted_labels == label].squeeze()
+    # if len(true_streamlines) >5000:
+    #     true_streamlines = true_streamlines[np.random.choice(true_streamlines.shape[0], 5000, replace=False)]
+    # if len(pred_streamlines) > 5000:
+    #     pred_streamlines = pred_streamlines[np.random.choice(pred_streamlines.shape[0], 5000, replace=False)]
+    
+    pred_streamlines = pred_streamlines.tolist()
+    true_streamlines = true_streamlines.tolist()
+    t1 = StatefulTractogram.from_sft(ArraySequence(true_streamlines), tractogram)
+    t2 = StatefulTractogram.from_sft(ArraySequence(pred_streamlines), tractogram)
+    # t1 = StatefulTractogram.from_sft(ArraySequence(true_streamlines), tractogram, space=Space.VOX)
+    # t2 = StatefulTractogram.from_sft(ArraySequence(pred_streamlines), tractogram, space=Space.VOX)
+    print(int_label_mapping[label], hcp_scores(t1, t2))
+

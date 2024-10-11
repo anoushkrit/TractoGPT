@@ -8,7 +8,7 @@ import json
 
 #%%
 with open ('test_pred.pkl', 'rb') as f:
-    true_labels, predicted_labels = pickle.load(f)
+    true_labels, predicted_labels, _ = pickle.load(f)
 # # Sample data (replace these with your actual labels)
 # true_labels = np.random.choice(['label1', 'label2', 'label3', 'label4', 'label5'], size=100)
 # predicted_labels = np.random.choice(['label1', 'label2', 'label3', 'label4', 'label5'], size=100)

@@ -4,12 +4,12 @@ path: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives
 points_per_streamline: 32
 num_local_neighbours: 65 # gives approx 1024 points 
 FSSradius: 6 # FSS on 7mm works better on select random streamlines
-samples_per_class: 1000
-sample_per_subject: 40000
+samples_per_class: 500
+sample_per_subject: 30000
 num_samples_per_class_per_batch: 8
 pts_per_sample: 1024
 debug_mode: False
 label_mapping_path: label_int_mapping_TrInF.json
-local_streamline_threshold_count: 1 
+local_streamline_threshold_count: 10
 use_resampled_streamline: False
 custom_batch: False

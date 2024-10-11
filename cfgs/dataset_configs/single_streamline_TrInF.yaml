@@ -4,8 +4,8 @@ path: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/
 # subset: testset
 points_per_streamline: 256
 pts_per_sample: 256
-samples_per_class: 1000
-sample_per_subject: 40000
+samples_per_class: 40000
+sample_per_subject: 400000000
 num_samples_per_class_per_batch: 15
 label_mapping_path: label_int_mapping_TrInF.json
 custom_batch: False

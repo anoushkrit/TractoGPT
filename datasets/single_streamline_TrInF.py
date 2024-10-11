@@ -134,10 +134,10 @@ class single_streamline_TrInF(Dataset):
             self.load_streamlines_mp()
         else:
             self.streamlines = self.loadORprocess(path, self.load_streamlines_mp, title='streamlines')
-        path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/subjectIds.pkl'
-        self.subject_ids = self.loadORprocess(path, self.load_streamlines_mp, title='subjectIds')
-        path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl'
-        self.labels = self.loadORprocess(path, self.load_streamlines_mp, title='labels')
+            path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/subjectIds.pkl'
+            self.subject_ids = self.loadORprocess(path, self.load_streamlines_mp, title='subjectIds')
+            path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl'
+            self.labels = self.loadORprocess(path, self.load_streamlines_mp, title='labels')
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl'
         self.resampled_streamlines = self.loadORprocess(path, self.fix_pts_in_streamlines, title='resampledStreamlines')
 
@@ -191,13 +191,18 @@ class single_streamline_TrInF(Dataset):
         streamlines = []
         streamline_to_class = {}
 
-        for clss in Path(os.path.join(data_path, subject, 'tractography')).iterdir():
+        dir_content = Path(os.path.join(data_path, subject, 'tractography')).iterdir()
+        dir_content = sorted([p for p in dir_content if p.is_file() and p.suffix == '.trk'])
+
+        for clss in dir_content:
             if clss.suffix != '.trk':
                 continue
             # if clss.stem not in self.label_int_mapping.keys():
             #     continue
 
             class_name = clss.stem.split('__')[-1]
+            # if class_name not in ['FPT_L', 'PYT_L']:
+            #     continue
             cls_path = os.path.join(data_path, subject, 'tractography', clss)
 
             loaded_streamlines = load_stream(cls_path)
@@ -214,7 +219,7 @@ class single_streamline_TrInF(Dataset):
             streamlines = [streamlines[i] for i in np.random.choice(len(streamlines), sample_per_subject, replace=False)]
 
         labels = [streamline_to_class[str(streamline)] for streamline in streamlines]
-        
+        print(len(labels))
         return subject_id, streamlines, labels
 
     def load_streamlines_mp(self):
@@ -227,7 +232,7 @@ class single_streamline_TrInF(Dataset):
         subject_data = [
             (subject, data_path, self.sample_per_subject, self.samples_per_class)
             # for subject in Path(data_path).iterdir() if subject.name == '599671' or subject.name == '644044'
-            for subject in Path(data_path).iterdir() if subject.name != 'meta' and os.path.isdir(subject)
+            for subject in Path(data_path).iterdir() if subject.name == 'sub-1047' and os.path.isdir(subject)
         ]
 
         # Using multiprocessing to parallelize the loading
@@ -244,13 +249,14 @@ class single_streamline_TrInF(Dataset):
         self.subject_ids = np.array(subject_ids)
         self.labels = np.array(labels)
         
-        with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl', 'wb') as f:
-            pickle.dump(self.streamlines, f)
-        with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl', 'wb') as f:
-            pickle.dump(self.labels,f)
-        with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/subjectIds.pkl', 'wb') as f:
-            pickle.dump(self.subject_ids, f)
-        return subjects_classes
+        print(len)
+        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl', 'wb') as f:
+        #     pickle.dump(self.streamlines, f)
+        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl', 'wb') as f:
+        #     pickle.dump(self.labels,f)
+        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/subjectIds.pkl', 'wb') as f:
+        #     pickle.dump(self.subject_ids, f)
+        # return subjects_classes
 
     def fix_pts_in_streamlines(self):
         pts = self.points_per_streamline
@@ -259,8 +265,8 @@ class single_streamline_TrInF(Dataset):
             resampled_streamlines = pool.map(choose_upORdownsample, x)
         resampled_streamlines = np.array(resampled_streamlines)
 
-        with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl', 'wb') as f:
-            pickle.dump(resampled_streamlines, f)
+        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl', 'wb') as f:
+        #     pickle.dump(resampled_streamlines, f)
         return resampled_streamlines
     
     def pc_norm(self, pc):
@@ -276,7 +282,8 @@ class single_streamline_TrInF(Dataset):
         return np.array(int_labels)
     def __getitem__(self,index):
         if not self.custom_batch:
-            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [0], torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
+            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), torch.from_numpy(np.array([self.resampled_streamlines[index]])), torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
+            # return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [0], torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
         self.itr_count+=1
         with open(f'{self.batch_root_path}/custom_batches_{self.batch_size}/batch_{index}.pkl', 'rb') as f:
             batch_streamlines_indices, batch_labels = pickle.load(f)
@@ -300,6 +307,7 @@ class single_streamline_TrInF(Dataset):
 # config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/single_streamline_TrInF.yaml')
 # x = single_streamline_TrInF(config)
 # #%%
+# len(x.labels)
 # a,b,c = x[0]
 # # %%
 # import plotly.graph_objects as go

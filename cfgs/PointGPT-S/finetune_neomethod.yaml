@@ -6,17 +6,17 @@ dataset:
   {
     train:
       {
-        _base_: cfgs/dataset_configs/s3FSSknnTrInF.yaml,
-        others: { subset: "testset" },
+        _base_: cfgs/dataset_configs/neomethod.yaml,
+        others: { subset: "trainset" },
       },
     val:
       {
-        _base_: cfgs/dataset_configs/s3FSSknnTrInF.yaml,
+        _base_: cfgs/dataset_configs/neomethod.yaml,
         others: { subset: "validset" },
       },
     test:
       {
-        _base_: cfgs/dataset_configs/s3FSSknnTrInF.yaml,
+        _base_: cfgs/dataset_configs/neomethod.yaml,
         others: { subset: "testset" },
       },
   }
@@ -26,7 +26,7 @@ model:
     trans_dim: 384,
     depth: 12,
     drop_path_rate: 0.1,
-    cls_dim: 71,
+    cls_dim: 32,
     num_heads: 6,
     group_size: 32,
     num_group: 64,
