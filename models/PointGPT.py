@@ -936,9 +936,9 @@ class PointTransformer(nn.Module):
 
         x = generated_points.reshape(B, -1, 3)
         y = gt_points.reshape(B, -1, 3)
-        for i in range(B):
-            if torch.isnan(x[i]).any():
-                self.plot_3d_scatter(y[i].unsqueeze(0))
+        # for i in range(B):
+        #     if torch.isnan(x[i]).any():
+        #         self.plot_3d_scatter(y[i].unsqueeze(0))
         loss1 = self.loss_func_p1(generated_points, gt_points)
         loss2 = self.loss_func_p2(generated_points, gt_points)
         

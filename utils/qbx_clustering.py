@@ -58,6 +58,7 @@ def load_TractoInferno(tracts_directory):
     import re        
     paths = sorted([p for p in Path(tracts_directory).iterdir() if p.is_file() and p.suffix == '.trk'])
     # for path in tqdm(paths):
+
     for path in paths:
         subject = re.search(r'\d{4}', str(path)).group()
         # print(subject)
@@ -154,7 +155,7 @@ level = len(qbx_hierarchy)
 
 #%%
 def func(args):
-    # pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}/tractography'
+    # pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}'
     pth, split, subject = args
     tracks, labels = load_TractoInferno(tracts_directory=pth)
     clusters = qbx_cci_clustering(tracks, labels, qbx_hierarchy, downsample=True)
@@ -177,11 +178,11 @@ def func(args):
     with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}/{subject}.pkl", "wb") as f:
         pickle.dump((final_list, tracks, labels), f)
 
-for split in ["trainset", "testset", "validset"]:
+for split in ["testset"]:
     print(split)
     if not os.path.exists(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}"):
         os.makedirs(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}")
-    for subject in tqdm(os.listdir(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}")):
+    for subject in os.listdir(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}"):
         pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}/tractography'
         tracks, labels = load_TractoInferno(tracts_directory=pth)
         clusters = qbx_cci_clustering(tracks, labels, qbx_hierarchy, downsample=True)

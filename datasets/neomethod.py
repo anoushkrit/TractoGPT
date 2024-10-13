@@ -20,14 +20,14 @@ from .build import DATASETS
 
 #%%
 def create_clusters_subject(args):
-    data, subject_id = args
+    data, subject_id, min_threshold_per_cluster, test = args
     clusters = []
-    cluster_labels = []
+    pc_cluster_labels = []
     included_streamlines = np.zeros(len(data['label'])) # none included here
     cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
 
     cluster_ids_l2 = []
-    for cluster_id in cluster_ids_l3[cluster_count_l3 < 10]:
+    for cluster_id in cluster_ids_l3[cluster_count_l3 <  min_threshold_per_cluster]:
         cluster_ids_l2.append(data['cluster_ids_l2'][np.where(data['cluster_ids_l3'] == cluster_id)[0][0]])
     cluster_ids_l2 = np.unique(cluster_ids_l2)
     cluster_count_l2 = np.zeros(len(cluster_ids_l2))
@@ -35,7 +35,7 @@ def create_clusters_subject(args):
         cluster_count_l2[i] = len(np.where(data['cluster_ids_l2'] == cluster_id)[0])
     
     cluster_ids_l1 = []
-    for cluster_id in cluster_ids_l2[cluster_count_l2 < 10]:
+    for cluster_id in cluster_ids_l2[cluster_count_l2 <  min_threshold_per_cluster]:
         cluster_ids_l1.append(data['cluster_ids_l1'][np.where(data['cluster_ids_l2'] == cluster_id)[0][0]])
     cluster_ids_l1 = np.unique(cluster_ids_l1)
     cluster_count_l1 = np.zeros(len(cluster_ids_l1))
@@ -46,44 +46,44 @@ def create_clusters_subject(args):
         cluster_streamline_idx = np.where(data['cluster_ids_l1'] == cluster_id)[0]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if len(cluster_streamline_idx)<10:
+        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
         label = u_labels[np.argmax(u_counts)]
         cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
         clusters.append(cluster_streamline_idx)
-        cluster_labels.append(label)
+        pc_cluster_labels.append(label)
 
     for cluster_id in cluster_ids_l2:
         cluster_streamline_idx = np.where(data['cluster_ids_l2'] == cluster_id)[0]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if len(cluster_streamline_idx)<10:
+        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
         label = u_labels[np.argmax(u_counts)]
         cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
         clusters.append(cluster_streamline_idx)
-        cluster_labels.append(label)
+        pc_cluster_labels.append(label)
 
     for cluster_id in cluster_ids_l3:
         cluster_streamline_idx = np.where(data['cluster_ids_l3'] == cluster_id)[0]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if len(cluster_streamline_idx)<10:
+        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
         label = u_labels[np.argmax(u_counts)]
         cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
         clusters.append(cluster_streamline_idx)
-        cluster_labels.append(label)
+        pc_cluster_labels.append(label)
 
-    return (clusters, cluster_labels)
+    return (clusters, pc_cluster_labels)
 def load_data(args):
-    pth, use_resampled_streamline, pts_per_sample = args
+    pth, use_resampled_streamline, pts_per_sample, min_threshold_per_cluster, test = args
     level = 3
     subject_data = {}
     subject_id = os.path.basename(pth).split('.')[0]
@@ -91,18 +91,25 @@ def load_data(args):
         data = pickle.load(f)
     
     data_x = np.array(data[0])
-    subject_data['streamlines'] = blist(data[1])
+    subject_data['streamlines'] = data[1]
     subject_data['label'] = np.array(data[2])
     subject_data['cluster_ids_l1'] = data_x[:,level-2]
     subject_data['cluster_ids_l2'] = data_x[:,level-1]
     subject_data['cluster_ids_l3'] = data_x[:,level]
 
-    cluster, cluster_labels = create_clusters_subject((subject_data, subject_id))
+    cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, min_threshold_per_cluster, test))
 
-    cluster_pc = np.zeros((len(cluster), pts_per_sample, 3))
+    pc_cluster = np.zeros((len(cluster), pts_per_sample, 3))
     for i in range(len(cluster)):
-        cluster_pc[i] = concat_streamlines((subject_data, cluster[i], use_resampled_streamline, pts_per_sample))
-    return (cluster_pc, cluster_labels, cluster)
+        pc_cluster[i] = concat_streamlines((subject_data, cluster[i], use_resampled_streamline, pts_per_sample))
+    
+    cluster_labels = []
+    for i in range(len(cluster)):
+        streamline_idx = np.array([int(cluster[i][j].split('_')[1]) for j in range(len(cluster[i]))])
+        cluster_labels.append(subject_data['label'][streamline_idx])
+    if test:
+        return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
+    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels)
 
 def pc_norm(pc):
     """ pc: NxC, return NxC """
@@ -152,8 +159,7 @@ class neomethod(Dataset):
         self.use_resampled_streamline = config.use_resampled_streamline
         self.min_threshold_per_cluster = config.min_threshold_per_cluster
         self.label_mapping_path = config.label_mapping_path
-        self.level = config.level
-        if self.subset == 'validset':
+        if self.subset == 'validset' or self.subset == 'testset':
             self.use_custom_batch = False
 
         if self.use_resampled_streamline:
@@ -161,14 +167,31 @@ class neomethod(Dataset):
 
         self.label_int_mapping = self.load_label_mapping()
         print(datetime.datetime.now())
-        if os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
-            print(os.path.join(self.save_path, f'{self.subset}.pkl'))
+        if self.subset == 'testset' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.cluster_pc, self.cluster_labels = pickle.load(f)
+                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels= pickle.load(f)
+                for i in self.streamlines.keys():
+                    self.streamlines[i] = blist(self.streamlines[i])
+            
+            if type(self.config.subject_ids) == list:
+                self.pc_cluster = [self.pc_cluster[i] for i in range(len(self.pc_cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
+                self.pc_cluster_labels = [self.pc_cluster_labels[i] for i in range(len(self.pc_cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
+                self.cluster_labels = [self.cluster_labels[i] for i in range(len(self.cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
+                self.streamlines = {i: self.streamlines[i] for i in self.streamlines.keys() if i in self.config.subject_ids}
+                self.streamline_labels = {i: self.streamline_labels[i] for i in self.streamline_labels.keys() if i in self.config.subject_ids}
+                self.cluster = [self.cluster[i] for i in range(len(self.cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
+                print(len(self.pc_cluster), len(self.pc_cluster_labels), len(self.cluster), len(self.cluster_labels))
+                print(self.streamlines.keys(), self.streamline_labels.keys())
+                self.pc_cluster = np.array(self.pc_cluster)
+                self.pc_cluster_labels = np.array(self.pc_cluster_labels)
+        elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
+            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
+                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels = pickle.load(f)
         else:
             self.load_and_process_data()
         print(datetime.datetime.now())
-        self.create_custom_batches()
+        if self.use_custom_batch:
+            self.create_custom_batches()
         print(datetime.datetime.now())
     
     def load_label_mapping(self):
@@ -178,14 +201,14 @@ class neomethod(Dataset):
         return label_mapping
 
     def create_custom_batches(self):
-        unique_labels, label_counts = np.unique(self.cluster_labels, return_counts=True)
+        unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
         print('min_label: ',min(label_counts))
         batch_size = self.samples_per_class_per_batch*len(unique_labels)
         num_batches = max(int(min(label_counts)//self.samples_per_class_per_batch), self.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
 
         for i, label in enumerate(unique_labels):
-            label_indices = np.where(self.cluster_labels == label)[0]
+            label_indices = np.where(self.pc_cluster_labels == label)[0]
             num_samples = self.samples_per_class_per_batch*num_batches
             full_rounds = num_samples//len(label_indices)
             remainder = num_samples%len(label_indices)
@@ -199,25 +222,40 @@ class neomethod(Dataset):
 
     def load_and_process_data(self):
 
-        subject_ids = os.listdir(self.data_path)
-        inp = [(os.path.join(self.data_path,i), self.use_resampled_streamline, self.pts_per_sample) for i in subject_ids]
+        subjects = [subject for subject in Path(self.data_path).iterdir() if os.path.isfile(subject)]
+        if self.subset == 'testset' and type(self.config.subject_ids) == list: # using only the given subjects
+            subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
+        inp = []
+        for subject in subjects:
+            inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.min_threshold_per_cluster, self.subset == 'testset'))
         with Pool() as p:
             print('inside pool')
             data = p.map(load_data, inp)
         
-        self.cluster_pc = []
-        self.cluster_labels = []
+        self.pc_cluster = []
+        self.pc_cluster_labels = []
         self.cluster = []
+        self.cluster_labels = []
+        self.streamlines = {}
+        self.streamline_labels = {}
         for i in range(len(data)):
-            self.cluster_pc.extend(data[i][0])
-            self.cluster_labels.extend(data[i][1])
+            self.pc_cluster.extend(data[i][0])
+            self.pc_cluster_labels.extend(data[i][1])
             self.cluster.extend(data[i][2])
+            self.cluster_labels.extend(data[i][3])
+            if self.subset == 'testset':
+                self.streamlines[subjects[i].name.split('.')[0]] = data[i][4]
+                self.streamline_labels[subjects[i].name.split('.')[0]] = data[i][5]
         
-        self.cluster_pc = np.array(self.cluster_pc)
-        self.cluster_labels = np.array(self.cluster_labels)
+        self.pc_cluster = np.array(self.pc_cluster)
+        self.pc_cluster_labels = np.array(self.pc_cluster_labels)
         
-        with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-            pickle.dump((self.cluster_pc, self.cluster_labels), f)
+        if self.subset != 'testset':
+            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
+                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels), f)
+        else:
+            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
+                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
         del data
         gc.collect()
 
@@ -226,13 +264,24 @@ class neomethod(Dataset):
         return np.array(int_labels)
     
     def __getitem__(self, index):
+        if self.subset == 'testset':
+            label = self.map_batch_labels([self.pc_cluster_labels[index]])
+            pc = self.pc_cluster[index]
+            subject = self.cluster[index][0].split('_')[0]
+            streamline_idx = [int(i.split('_')[1]) for i in self.cluster[index]]
+            streamlines = [list(self.streamlines[subject][i]) for i in streamline_idx]
+            streamline_labels = self.streamline_labels[subject][streamline_idx]
+            streamline_labels = list(self.map_batch_labels(streamline_labels))
+            subject = [subject]*len(streamlines)
+            return torch.tensor(label).long(), [str(subject), str(streamline_labels), str(streamlines)], torch.tensor(pc).float()
+
         if not self.use_custom_batch:
-            label = self.map_batch_labels([self.cluster_labels[index]])
-            pc = self.cluster_pc[index]
+            label = self.map_batch_labels([self.pc_cluster_labels[index]])
+            pc = self.pc_cluster[index]
             return torch.tensor(label).long(), [0], torch.tensor(pc).float()
         else:
-            batch_label = self.map_batch_labels([self.cluster_labels[i] for i in self.custom_batches[index]])
-            batch_pc = np.array([self.cluster_pc[i] for i in self.custom_batches[index]])
+            batch_label = self.map_batch_labels([self.pc_cluster_labels[i] for i in self.custom_batches[index]])
+            batch_pc = np.array([self.pc_cluster[i] for i in self.custom_batches[index]])
 
             shuffle_batch = np.random.choice(len(batch_label), len(batch_label), replace=False)
             batch_label = batch_label[shuffle_batch]
@@ -241,20 +290,20 @@ class neomethod(Dataset):
             return torch.from_numpy(batch_label.astype(np.float32)), [0], torch.from_numpy(batch_pc.astype(np.float32))
     def __len__(self):
         if not self.use_custom_batch:
-            return len(self.cluster_pc)
+            return len(self.pc_cluster)
         else:
             return len(self.custom_batches)
         
 #%%
 # config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/neomethod.yaml')
 # dataset = neomethod(config)
-# #%%
+#%%
 # cnt = 0
 # for i in range(len(dataset.cluster)):
 #     if(len(dataset.cluster[i]))<10:
 #         cnt+=1
 # print(cnt)
-# print(len(np.unique(dataset.cluster_labels, return_counts=True)[1]))
+# print(len(np.unique(dataset.pc_cluster_labels, return_counts=True)[1]))
 # import plotly.graph_objects as go
 
 # def plot_point_cloud(points, labels):
@@ -304,3 +353,12 @@ class neomethod(Dataset):
 # # dataset[10]
 # #%%
 # print(dataset.custom_batches.shape)
+#%%
+# tot = 0
+# for i in dataset.streamlines.keys():
+#     tot+=len(dataset.streamlines[i])
+# print(tot)
+# tot = 0
+# for i in dataset.clusters:
+#     tot+=len(i)
+# print(tot)

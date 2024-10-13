@@ -293,7 +293,7 @@ def qbx_cci_clustering(subject_directory: str,
 if __name__ == "__main__":
     split = "train"
     sub = "1030"
-    tracts_path = f"/s3/DATA/TractoInferno/derivatives/{split}set/sub-{sub}/tractography"
+    tracts_path = f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}set/sub-{sub}/tractography"
     # TODO: add func to handle a single trk file 
     idx_clu_label = qbx_cci_clustering(subject_directory= tracts_path, 
                        dataset = "TractoInferno",
@@ -313,11 +313,11 @@ if __name__ == "__main__":
 
     #%%
 
-    visualize_tracks(cl1, cl2)
+    # visualize_tracks(cl1, cl2)
     #%%
     # tractogram is subject specific, and DICE is also subject specific. 
     # When calculating DICE, we need to use the same tractogram.for the same subject
-    tractogram = load_tractogram(f"/s3/DATA/TractoInferno/derivatives/{split}set/sub-{sub}/tractography/sub-{sub}__AF_L.trk", "same", bbox_valid_check=False)
+    tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}set/sub-{sub}/tractography/sub-{sub}__AF_L.trk", "same", bbox_valid_check=False)
     # DICE, overlap , overreach
     from dipy.io.stateful_tractogram import StatefulTractogram, Space
     from dice import hcp_scores
@@ -356,7 +356,7 @@ if __name__ == "__main__":
                         dataset = "TractoInferno",
                         qbx_hierarchy = [40,30,20,10,8,6,4],
                         small_cluster_threshold = 5,
-                        save_path = "/s3/DATA/ClusterData",
+                        save_path = "./",
                         return_list = False,
                         level =None,
                         downsample= False)

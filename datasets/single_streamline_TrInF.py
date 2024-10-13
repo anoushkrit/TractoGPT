@@ -5,12 +5,13 @@ import datetime
 import numpy as np
 from pathlib import Path
 import torch
+from hashlib import sha256
 from tqdm import tqdm
 from dipy.segment.fss import FastStreamlineSearch
 from dipy.io.streamline import load_tractogram
 from torch.utils.data import Dataset
 from scipy.interpolate import CubicSpline
-from multiprocessing import Pool, cpu_count, set_start_method
+from multiprocessing import Pool
 from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
 from dipy.tracking.distances import approx_polygon_track as apt
 sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT')
@@ -58,32 +59,6 @@ def interp_streamline(args):
     ]).T
     
     return resampled_streamline
-# def interp_streamline(args):
-#     streamline, pts = args
-    
-#     # Compute cumulative distances along the streamline (parametric variable)
-#     distances = np.sqrt(np.sum(np.diff(streamline, axis=0)**2, axis=1))
-#     param = np.hstack([[0], np.cumsum(distances)])
-
-#     # Normalize the parametric variable to the range [0, 1]
-#     param /= param[-1]
-
-#     # Interpolate along the parametric variable
-#     new_param = np.linspace(0, 1, pts)
-    
-#     # Perform cubic spline interpolation
-#     x_interp = CubicSpline(param, streamline[:, 0], bc_type='natural')
-#     y_interp = CubicSpline(param, streamline[:, 1], bc_type='natural')
-#     z_interp = CubicSpline(param, streamline[:, 2], bc_type='natural')
-    
-#     # Resample the streamline at the new parametric values
-#     resampled_streamline = np.vstack([
-#         x_interp(new_param),
-#         y_interp(new_param),
-#         z_interp(new_param)
-#     ]).T
-    
-#     return resampled_streamline
 
 def choose_upORdownsample(args):
     streamline, pts = args
@@ -91,14 +66,6 @@ def choose_upORdownsample(args):
         return interp_streamline((streamline, pts))
     else:
         return downsample((streamline, pts))
-
-def FSS(args):
-    streamlines, main_streamline, radius, indices = args
-    fs_tree_af = FastStreamlineSearch(ref_streamlines=streamlines, max_radius=radius)
-    coo_mdist_mtx = fs_tree_af.radius_search(main_streamline, radius=radius)
-    ids_ref = np.unique(coo_mdist_mtx.col) 
-    ids_ref = [indices[i] for i in ids_ref]
-    return ids_ref
 
 @DATASETS.register_module()
 class single_streamline_TrInF(Dataset):
@@ -113,6 +80,8 @@ class single_streamline_TrInF(Dataset):
         self.pts_per_sample = config.pts_per_sample
         self.label_mapping_path = config.label_mapping_path
         self.custom_batch = config.custom_batch 
+        self.subject_ids = config.subject_ids
+
         if self.subset == 'testset':
             self.custom_batch = False
 
@@ -121,16 +90,12 @@ class single_streamline_TrInF(Dataset):
         if not os.path.exists(self.batch_root_path):
             os.makedirs(self.batch_root_path)
         
-        if not os.path.exists(self.label_mapping_path):
-            raise FileNotFoundError("either the path of mapping json is wrong or it does not exist")
-        else:
-            with open(self.label_mapping_path,'r') as f:
-                self.label_int_mapping = json.load(f)
+        self.load_label_mapping()
 
         self.root_path = 'data/dataTrInF/single_streamline'
 
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl'
-        if not os.path.exists(path):
+        if not os.path.exists(path) or self.subset=='testset': 
             self.load_streamlines_mp()
         else:
             self.streamlines = self.loadORprocess(path, self.load_streamlines_mp, title='streamlines')
@@ -142,12 +107,16 @@ class single_streamline_TrInF(Dataset):
         self.resampled_streamlines = self.loadORprocess(path, self.fix_pts_in_streamlines, title='resampledStreamlines')
 
         if self.custom_batch:
-            print('batching')
             self.create_custom_batch()
         
-        self.itr_count = 0
         print('end : ', datetime.datetime.now())
 
+    def load_label_mapping(self):
+        if not os.path.exists(self.label_mapping_path):
+            raise FileNotFoundError("either the path of mapping json is wrong or it does not exist")
+        else:
+            with open(self.label_mapping_path,'r') as f:
+                self.label_int_mapping = json.load(f)
     def loadORprocess(self, path, process_func, title):
         
         if not os.path.exists(path):
@@ -184,6 +153,8 @@ class single_streamline_TrInF(Dataset):
             with open(f'{self.batch_root_path}/custom_batches_{self.batch_size}/batch_{i}.pkl', 'wb') as f:
                 pickle.dump((batch, respective_labels),f)
     
+    def hash_streamline(self, streamline):
+        return sha256(streamline.tobytes()).hexdigest()
     def load_subject(self,subject_data):
         """ Helper function to process streamlines for a single subject. """
         subject, data_path, sample_per_subject, samples_per_class = subject_data
@@ -195,68 +166,61 @@ class single_streamline_TrInF(Dataset):
         dir_content = sorted([p for p in dir_content if p.is_file() and p.suffix == '.trk'])
 
         for clss in dir_content:
-            if clss.suffix != '.trk':
-                continue
-            # if clss.stem not in self.label_int_mapping.keys():
-            #     continue
-
             class_name = clss.stem.split('__')[-1]
-            # if class_name not in ['FPT_L', 'PYT_L']:
-            #     continue
-            cls_path = os.path.join(data_path, subject, 'tractography', clss)
+            if class_name not in self.label_int_mapping.keys():
+                continue
 
+            cls_path = os.path.join(data_path, subject, 'tractography', clss)
             loaded_streamlines = load_stream(cls_path)
+
             # Optionally downsample if needed
             if len(loaded_streamlines) > samples_per_class:
                 # loaded_streamlines = select_random_set_of_streamlines(loaded_streamlines, self.samples_per_class)
                 loaded_streamlines = [loaded_streamlines[i] for i in np.random.choice(len(loaded_streamlines), samples_per_class, replace=False)]
             
             streamlines.extend(loaded_streamlines)
-            streamline_to_class.update({str(streamline): class_name for streamline in loaded_streamlines})
+            streamline_to_class.update({self.hash_streamline(streamline): class_name for streamline in loaded_streamlines})
 
         if len(streamlines) > sample_per_subject:
             # streamlines = select_random_set_of_streamlines(streamlines, sample_per_subject)
             streamlines = [streamlines[i] for i in np.random.choice(len(streamlines), sample_per_subject, replace=False)]
 
-        labels = [streamline_to_class[str(streamline)] for streamline in streamlines]
-        print(len(labels))
+        labels = [streamline_to_class[self.hash_streamline(streamline)] for streamline in streamlines]
         return subject_id, streamlines, labels
 
     def load_streamlines_mp(self):
         data_path = os.path.join(self.path, self.subset)
-        subjects_classes = {}
         streamlines = []
         subject_ids = []
         labels = []
 
-        subject_data = [
-            (subject, data_path, self.sample_per_subject, self.samples_per_class)
-            # for subject in Path(data_path).iterdir() if subject.name == '599671' or subject.name == '644044'
-            for subject in Path(data_path).iterdir() if subject.name == 'sub-1047' and os.path.isdir(subject)
-        ]
+        subjects = [subject for subject in Path(data_path).iterdir() if os.path.isdir(subject)]
+        if self.subset=='testset' and type(self.config.subject_ids) == list: # using only the given subjects
+            subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
+        
+        subject_data = [(subject, data_path, self.sample_per_subject, self.samples_per_class)for subject in subjects]
 
         # Using multiprocessing to parallelize the loading
         with Pool(processes=os.cpu_count()) as pool:
             results = pool.map(self.load_subject, subject_data)
 
         for subject_id, subject_streamlines, subject_labels in results:
-            subjects_classes[subject_id] = dict(zip(subject_labels, subject_streamlines))
             streamlines.extend(subject_streamlines)
             subject_ids.extend([subject_id] * len(subject_streamlines))
             labels.extend(subject_labels)
 
+        print(len(labels))
         self.streamlines = streamlines
         self.subject_ids = np.array(subject_ids)
         self.labels = np.array(labels)
         
-        print(len)
-        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl', 'wb') as f:
-        #     pickle.dump(self.streamlines, f)
-        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl', 'wb') as f:
-        #     pickle.dump(self.labels,f)
-        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/subjectIds.pkl', 'wb') as f:
-        #     pickle.dump(self.subject_ids, f)
-        # return subjects_classes
+        if self.subset != 'testset':
+            with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl', 'wb') as f:
+                pickle.dump(self.streamlines, f)
+            with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/labels.pkl', 'wb') as f:
+                pickle.dump(self.labels,f)
+            with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/subjectIds.pkl', 'wb') as f:
+                pickle.dump(self.subject_ids, f)
 
     def fix_pts_in_streamlines(self):
         pts = self.points_per_streamline
@@ -265,8 +229,9 @@ class single_streamline_TrInF(Dataset):
             resampled_streamlines = pool.map(choose_upORdownsample, x)
         resampled_streamlines = np.array(resampled_streamlines)
 
-        # with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl', 'wb') as f:
-        #     pickle.dump(resampled_streamlines, f)
+        if self.subset != 'testset':
+            with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl', 'wb') as f:
+                pickle.dump(resampled_streamlines, f)
         return resampled_streamlines
     
     def pc_norm(self, pc):
@@ -282,13 +247,12 @@ class single_streamline_TrInF(Dataset):
         return np.array(int_labels)
     def __getitem__(self,index):
         if not self.custom_batch:
-            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), torch.from_numpy(np.array([self.resampled_streamlines[index]])), torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
-            # return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [0], torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
-        self.itr_count+=1
+            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [self.subject_ids[index], str(self.streamlines[index])], torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
+
         with open(f'{self.batch_root_path}/custom_batches_{self.batch_size}/batch_{index}.pkl', 'rb') as f:
             batch_streamlines_indices, batch_labels = pickle.load(f)
-        
         batch_pc = np.zeros((self.batch_size, self.pts_per_sample, 3))
+
         for i,idx in enumerate(batch_streamlines_indices):
             batch_pc[i] = self.resampled_streamlines[idx].copy()
             batch_pc[i] = batch_pc[i][np.random.choice(len(batch_pc[i]), self.pts_per_sample, replace=False)]

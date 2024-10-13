@@ -3,9 +3,10 @@ import torch.nn as nn
 from tools import builder
 from utils import misc, dist_utils
 import time
+import json
 from utils.logger import *
 from utils.AverageMeter import AverageMeter
-
+import pickle
 import numpy as np
 from datasets import data_transforms
 from pointnet2_ops import pointnet2_utils
@@ -465,22 +466,21 @@ def test_net(args, config):
 
 def test(base_model, test_dataloader, args, config, logger=None):
 
-    import json
-    with open('label_int_mapping.json', 'r') as f:
-        label_int_mapping = json.load(f)
-
-    int_label_mapping = {int(value): key for key, value in label_int_mapping.items()}
-
     base_model.eval()  # set model to eval mode
+    dataset_name = config.dataset.train._base_.NAME
 
-    raw_streamlines = []
+    if dataset_name == 'single_streamline_TrInF' or dataset_name == 'neomethod' or dataset_name == 'single_streamline':
+        raw_streamlines = [] # only required for single_streamline_TrInF
+        subjects = []
+    if dataset_name == 'neomethod':
+        streamline_label = []
     test_pred = []
     test_label = []
     npoints = config.npoints
 
     with torch.no_grad():
         for idx, (taxonomy_ids, extra_info, data) in enumerate(test_dataloader):
-            dataset_name = config.dataset.train._base_.NAME
+            # print(type(extra_info), type(extra_info[0]), type(extra_info[1]), type(extra_info[0][0]))
             if config.total_bs > 1:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
@@ -501,7 +501,6 @@ def test(base_model, test_dataloader, args, config, logger=None):
             else:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
-
             points = misc.fps(points, npoints)
 
             if dataset_name == 'streamPC':
@@ -514,23 +513,25 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
             pred = logits.argmax(-1).view(-1)
 
-            raw_streamlines.append(extra_info.detach())
+            if dataset_name == 'single_streamline_TrInF' or dataset_name == 'single_streamline':
+                raw_streamlines.append(list(extra_info[1]))
+                subjects.append(list(extra_info[0]))
+            if dataset_name == 'neomethod':
+                subjects.append(list(extra_info[0]))
+                streamline_label.append(list(extra_info[1]))
+                raw_streamlines.append(list(extra_info[2]))
             test_pred.append(pred.detach())
             test_label.append(target.detach())
 
-            # pred = pred.cpu().numpy()
-            # target = target.cpu().numpy()
-            # for i in np.random.choice(len(target),10):
-            #     if pred[i] != target[i]:
-            #         plot_3d_point_cloud_with_annotations(points[i].cpu().numpy(), actual_labels=target[i], predicted_labels=pred[i], int_label_mapping=int_label_mapping)
 
         test_pred = torch.cat(test_pred, dim=0)
         test_label = torch.cat(test_label, dim=0)
-        raw_streamlines = torch.cat(raw_streamlines, dim=0)
+        if dataset_name == 'single_streamline_TrInF' or dataset_name == 'neomethod' or dataset_name == 'single_streamline':
+            raw_streamlines = [item for sublist in raw_streamlines for item in sublist]
+            subjects = [item for sublist in subjects for item in sublist]
+        if dataset_name == 'neomethod':
+            streamline_label = [item for sublist in streamline_label for item in sublist]
 
-        import pickle 
-        with open('test_pred.pkl', 'wb') as f:
-            pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines.cpu().numpy()), f)
         if args.distributed:
             test_pred = dist_utils.gather_tensor(test_pred, args)
             test_label = dist_utils.gather_tensor(test_label, args)
@@ -542,6 +543,15 @@ def test(base_model, test_dataloader, args, config, logger=None):
         if args.distributed:
             torch.cuda.synchronize()
 
+        if dataset_name == 'single_streamline_TrInF':
+            with open('predictions/test_pred_TPSS.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
+        if dataset_name == 'neomethod':
+            with open('predictions/test_pred_neomethod_GPTM.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
+        if dataset_name == 'single_streamline':
+            with open('predictions/test_pred_single_streamline_105HCP.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
         # print_log(f"[TEST_VOTE]", logger=logger)
         # acc = 0.
         # for time in range(1, 300):
