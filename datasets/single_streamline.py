@@ -107,7 +107,7 @@ class single_streamline(Dataset):
         self.label_mapping_path = config.label_mapping_path
         self.use_custom_batch = config.custom_batch
         self.min_batches = config.min_batches
-        if self.subset == 'test':
+        if self.subset == 'test' or self.subset == 'val':
             self.use_custom_batch = False
 
         print('Processing data for :',self.subset)
@@ -163,7 +163,7 @@ class single_streamline(Dataset):
         unique_labels, label_counts = np.unique(self.labels, return_counts=True)
         print('min_label: ',min(label_counts))
         batch_size = self.num_samples_per_class_per_batch*len(unique_labels)
-        num_batches = max(int(min(label_counts)//self.samples_per_class_per_batch), self.min_batches)
+        num_batches = max(int(min(label_counts)//self.num_samples_per_class_per_batch), self.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
 
         for i, label in enumerate(unique_labels):
@@ -274,9 +274,11 @@ class single_streamline(Dataset):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]
         return np.array(int_labels)
     def __getitem__(self,index):
-        if not self.use_custom_batch:
-            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [str(self.subject_ids[index]), str(self.streamlines[index])], torch.from_numpy(self.resampled_streamlines[index].astype(np.float32))
+        if self.subset == 'test':
+            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [str(self.subject_ids[index]), str(self.streamlines[index])], torch.from_numpy(np.array(self.resampled_streamlines[index]).astype(np.float32))
             # return torch.from_numpy(self.label_int_mapping[self.labels[index]]), [0], torch.from_numpy(self.resampled_streamlines[index].astype(np.float32))
+        elif not self.use_custom_batch:
+            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [0], torch.from_numpy(np.array(self.resampled_streamlines[index]).astype(np.float32))
         else:
             streamline_idx = self.custom_batches[index]
             labels = self.labels[streamline_idx]

@@ -57,8 +57,9 @@ def evaluate_svm(train_features, train_labels, test_features, test_labels):
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
     # build dataset
-    (train_sampler, train_dataloader), (_, test_dataloader), = builder.dataset_builder(args, config.dataset.train), \
-        builder.dataset_builder(args, config.dataset.val)
+    # (train_sampler, train_dataloader), (_, test_dataloader), = builder.dataset_builder(args, config.dataset.train), \
+    #     builder.dataset_builder(args, config.dataset.val)
+    (train_sampler, train_dataloader)= builder.dataset_builder(args, config.dataset.train)
     (_, extra_train_dataloader) = builder.dataset_builder(
         args, config.dataset.extra_train) if config.dataset.get('extra_train') else (None, None)
     # build model
@@ -127,7 +128,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             dataset_name = config.dataset.train._base_.NAME
             if config.total_bs > 1:
                 points = data.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
+            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or 'single_streamline' in dataset_name:
                 points = data.squeeze().cuda()
             elif dataset_name == 'ShapeNet' or dataset_name == 'UnlabeledHybrid':
                 points = data.cuda()

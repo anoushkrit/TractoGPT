@@ -6,26 +6,26 @@ dataset:
   {
     train:
       {
-        _base_: cfgs/dataset_configs/single_streamline_TrInF.yaml,
-        others: { subset: "trainset", npoints: 256 },
+        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        others: { subset: "train", npoints: 1024 },
       },
     val:
       {
-        _base_: cfgs/dataset_configs/single_streamline_TrInF.yaml,
-        others: { subset: "validset", npoints: 256 },
+        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        others: { subset: "val", npoints: 1024 },
       },
     test:
       {
-        _base_: cfgs/dataset_configs/single_streamline_TrInF.yaml,
-        others: { subset: "testset", npoints: 256 },
+        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        others: { subset: "test", npoints: 1024 },
       },
   }
 
 model:
   {
     NAME: PointGPT,
-    cls_dim: 32,
-    group_size: 8,
+    cls_dim: 25,
+    group_size: 32,
     num_group: 64,
     loss: cdl12,
     weight_center: 1,
@@ -43,7 +43,7 @@ model:
       },
   }
 
-npoints: 256
-total_bs: 512
+npoints: 1024
+total_bs: 500
 step_per_update: 1
 max_epoch: 300

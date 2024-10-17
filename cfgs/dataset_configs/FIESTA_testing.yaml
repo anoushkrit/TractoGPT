@@ -1,0 +1,3 @@
+NAME: FIESTA_testing
+pts_per_sample: 1024
+hdf5_path: /scratch/anoushkrit.scee.iitmandi/DATA/FIESTA/7562790/data_tractoinferno_hcp_qbx.hdf5

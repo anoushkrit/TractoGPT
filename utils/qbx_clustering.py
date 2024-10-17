@@ -63,14 +63,17 @@ def load_TractoInferno(tracts_directory):
         subject = re.search(r'\d{4}', str(path)).group()
         # print(subject)
         if path.is_file() and path.suffix == '.trk':
-            label = re.search(r'__(.*?)\.trk', str(path)).group(1)
+            # label = re.search(r'__(.*?)\.trk', str(path)).group(1)
+            label = str(path).split('/')[-1].split('.')[0]
             tractogram = load_trk(str(path), "same", bbox_valid_check=False)
             num_streamlines = len(tractogram.streamlines)
         else:
             raise Warning(f"Warning: {path} is not a trk file, skipping")
-        with open(os.path.join(tracts_directory, f"tractoinferno_{subject}.txt"), "a") as f:
-            f.write(f"Number of Streamline in {label} is {num_streamlines}\n")
+        # with open(os.path.join(tracts_directory, f"tractoinferno_{subject}.txt"), "a") as f:
+        #     f.write(f"Number of Streamline in {label} is {num_streamlines}\n")
         for s in tractogram.streamlines:
+            if label == 'CC' or label == 'CC_0' or label == '704238' or label == '705341':
+                continue
             labels.append(label)
             tracks.append(s)
     # print(F"Removing Duplicates from {len(tracks)} streamlines")
@@ -178,12 +181,14 @@ def func(args):
     with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}/{subject}.pkl", "wb") as f:
         pickle.dump((final_list, tracks, labels), f)
 
-for split in ["testset"]:
+for split in ["val"]:
     print(split)
-    if not os.path.exists(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}"):
-        os.makedirs(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}")
-    for subject in os.listdir(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}"):
-        pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}/tractography'
+    if not os.path.exists(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_105HCP/qbx/{split}"):
+        os.makedirs(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_105HCP/qbx/{split}")
+    for subject in os.listdir(f"/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/{split}"):
+        print(subject)
+        pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/{split}/{subject}/tracts'
+        # print(os.listdir(pth))
         tracks, labels = load_TractoInferno(tracts_directory=pth)
         clusters = qbx_cci_clustering(tracks, labels, qbx_hierarchy, downsample=True)
         tidxs_4, cidxs_4 = make_tracks_clusters_map(clusters, level-2)
@@ -202,7 +207,7 @@ for split in ["testset"]:
         final_merged_df.columns = ['track_indices', '3last', '2last', 'last']
         final_list = final_merged_df.values.tolist()
 
-        print('saving file at', f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}/{subject}.pkl")
-        with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}/{subject}.pkl", "wb") as f:
+        print('saving file at', f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_105HCP/qbx/{split}/{subject}.pkl")
+        with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_105HCP/qbx/{split}/{subject}.pkl", "wb") as f:
             pickle.dump((final_list, tracks, labels), f)
 

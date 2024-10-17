@@ -4,12 +4,12 @@ path: /scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP
 # subset: train
 points_per_streamline: 256
 pts_per_sample: 256
-samples_per_class: 2000
+samples_per_class: 150
 sample_per_subject: 1000000
-min_batches: 2000
-num_samples_per_class_per_batch: 10
+min_batches: 1700
+num_samples_per_class_per_batch: 7
 custom_batch: False
-label_mapping_path: label_int_mapping.json
+label_mapping_path: label_int_mappings/label_int_mapping_105HCP.json
 subject_ids: all
 # subject_ids: ['599469']
 # subject_ids: ['599469', '622236']

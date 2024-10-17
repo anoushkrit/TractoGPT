@@ -1,0 +1,11 @@
+NAME: qbx_goback_3L
+data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx
+
+# subset: testset
+use_custom_batch: False
+pts_per_sample: 1024
+minimum_batches: 1500
+samples_per_class_per_batch: 10
+use_resampled_streamline: False
+label_mapping_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/label_int_mapping_TrInF.json
+min_threshold_per_cluster: 10

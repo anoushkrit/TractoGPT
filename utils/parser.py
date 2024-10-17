@@ -29,6 +29,7 @@ def get_args():
         help='whether to use sync bn')
     # some args
     parser.add_argument('--exp_name', type = str, default='default', help = 'experiment name')
+    parser.add_argument('--exp_subset', type = str, default='', help = 'experiment subset')
     parser.add_argument('--loss', type=str, default='cd1', help='loss name')
     parser.add_argument('--start_ckpts', type = str, default=None, help = 'reload used ckpt path')
     parser.add_argument('--ckpts', type = str, default=None, help = 'test used ckpt path')
@@ -95,8 +96,10 @@ def get_args():
         args.exp_name = 'test_' + args.exp_name
     if args.mode is not None:
         args.exp_name = args.exp_name + '_' +args.mode
-    args.experiment_path = os.path.join('./experiments_TrInf', Path(args.config).stem, Path(args.config).parent.stem, args.exp_name)
-    args.tfboard_path = os.path.join('./experiments_TrInf', Path(args.config).stem, Path(args.config).parent.stem,'TFBoard' ,args.exp_name)
+    # args.experiment_path = os.path.join('./experiments_TrInf', Path(args.config).stem, Path(args.config).parent.stem, args.exp_name)
+    # args.tfboard_path = os.path.join('./experiments_TrInf', Path(args.config).stem, Path(args.config).parent.stem,'TFBoard' ,args.exp_name)
+    args.experiment_path = os.path.join(f'./experiments', args.exp_subset, Path(args.config).stem, Path(args.config).parent.stem, args.exp_name)
+    args.tfboard_path = os.path.join(f'./experiments', args.exp_subset, Path(args.config).stem, Path(args.config).parent.stem,'TFBoard' ,args.exp_name)
     args.log_name = Path(args.config).stem
     create_experiment_dir(args)
     return args

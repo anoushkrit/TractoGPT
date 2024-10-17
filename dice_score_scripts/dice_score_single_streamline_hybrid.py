@@ -1,0 +1,126 @@
+import sys
+sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+from utils.dice import *
+import pickle
+from nibabel.streamlines.array_sequence import ArraySequence
+import numpy as np
+from dipy.io.streamline import load_tractogram
+import json
+from dipy.io.stateful_tractogram import StatefulTractogram, Space
+sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+from utils.dice import hcp_scores
+import ast
+from tqdm import tqdm
+from multiprocessing import Pool
+import os
+import pandas as pd
+
+
+def load_pickle_data(path):
+    with open(path, 'rb') as f:
+        true_labels, predicted_labels, streamlines, subjects = pickle.load(f)
+
+    return true_labels, predicted_labels, streamlines, subjects
+
+def string_to_list(streamline):
+    list_str = ','.join(streamline.split())
+    clean_list_str = list_str.replace('[,', '[').replace(',]', ']')
+    streamline = np.array(ast.literal_eval(clean_list_str))
+    
+    return streamline
+
+def get_label_mapping(path):
+    with open(path, 'r') as f:
+        int_label_mapping = json.load(f)
+    return int_label_mapping
+def calculate_hcp_scores_subject(args):
+    
+    sub, true_labels, predicted_labels, streamlines, int_label_mapping= args
+    unique_labels = np.unique(true_labels)
+    if len(unique_labels) == 0:
+        return (sub, {})
+    if 'sub' in sub:
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/{sub}/tractography/{sub}__{int_label_mapping[f'TractoInferno_{unique_labels[0]}']}.trk", "same", bbox_valid_check=False)
+    else:
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/test/{sub}/tracts/{int_label_mapping[f'105HCP_{unique_labels[0]}']}.trk", "same", bbox_valid_check=False)
+    dic = {}
+    for label in unique_labels:
+        true_streamlines = [s for s, t in zip(streamlines, true_labels) if t == label]
+        pred_streamlines = [s for s, t in zip(streamlines, predicted_labels) if t == label]
+        t1 = StatefulTractogram.from_sft(ArraySequence(true_streamlines), tractogram)
+        t2 = StatefulTractogram.from_sft(ArraySequence(pred_streamlines), tractogram)
+        if 'sub' in sub:
+            dic[int_label_mapping[f'TractoInferno_{label}']] = hcp_scores(t1, t2)
+        else:
+            dic[int_label_mapping[f'105HCP_{label}']] = hcp_scores(t1, t2)
+        # dic[int_label_mapping[label]] = hcp_scores(t1, t2)
+        
+    return [sub, dic]
+
+def calculate_hcp_scores(pickle_path, mapping_path, output_path):
+
+    true_labels, predicted_labels, streamlines, subjects = load_pickle_data(pickle_path)
+    print('----- pickle data loaded -----')
+    subjects = np.array(subjects)
+    unique_subjects = np.unique(subjects)
+    
+    with Pool() as p:
+        streamlines = p.map(string_to_list, streamlines)
+    print('----- string to list done -----')
+    eq = 0
+    for i in range(len(true_labels)):
+        if true_labels[i] == predicted_labels[i]:
+            eq += 1
+    print(f'---- Streamline Accuracy {eq/len(true_labels)*100:.4f}% ----')
+    int_label_mapping = get_label_mapping(mapping_path)
+
+    inp = [] # creating input to pass to the function while multiprocessing
+    for sub in unique_subjects:
+        subject_streamlines = [s for s,t in zip(streamlines, subjects) if t == sub]
+        true_labels_subject = [t for t, s in zip(true_labels, subjects) if s == sub]
+        predicted_labels_subject = [t for t, s in zip(predicted_labels, subjects) if s == sub]
+        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping))
+
+
+    output = {}
+    if os.path.isfile(output_path):
+        with open(output_path, 'r') as f:
+            output = json.load(f)
+    for i in range(len(inp)):
+        output[unique_subjects[i]] = calculate_hcp_scores_subject(inp[i])
+        output[unique_subjects[i]][0] = eq/len(true_labels)*100
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w') as f:
+        json.dump(output, f, indent=4)
+    return output
+
+def convert_json_to_csv(json_data, out_path):
+    output_path = out_path.split('.')[0] + '.csv'
+    for i in json_data.keys():
+        json_data[i] = json_data[i][1]
+
+    # Flatten the JSON structure into a list of dictionaries
+    flattened_data = []
+    for subject_id, classes in json_data.items():
+        row = {'subject_id': subject_id}
+        for class_name, scores in classes.items():
+            for metric, value in scores.items():
+                if(metric != 'dice'):
+                    continue
+                row[f'{class_name}'] = value
+        flattened_data.append(row)
+
+    # Create the DataFrame
+    df = pd.DataFrame(flattened_data)
+
+    # Set 'subject_id' as the index (row labels)
+    df.set_index('subject_id', inplace=True)
+
+    # Display the DataFrame
+    df.to_csv(output_path)
+if __name__ == "__main__":
+    pickle_path = 'predictions/pkls/test_pred_single_streamline_hybrid.pkl'
+    mapping_path = 'label_int_mappings/int_label_mapping_hybrid.json'
+    output_path = 'predictions/single_GPTM_hybrid/dice_scores_single_streamline_hybrid.json'
+    json_dice = calculate_hcp_scores(pickle_path, mapping_path, output_path)
+    convert_json_to_csv(json_dice, output_path)
