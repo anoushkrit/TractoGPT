@@ -11,7 +11,7 @@ import datasets.single_streamline
 # import datasets.streamPC
 # import datasets.s3FSSknnLRC
 import datasets.s3FSSknnTrInF
-# import datasets.single_streamline_TrInF
+import datasets.single_streamline_TrInF
 import datasets.qbx_goback_3L
-import datasets.qbx_goback_3L_105HCP
+# import datasets.qbx_goback_3L_105HCP
 import datasets.single_streamline_hybrid

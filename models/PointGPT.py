@@ -15,6 +15,39 @@ from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL2
 from models.GPT import GPT_extractor, GPT_generator
 import math
 from models.z_order import *
+import similaritymeasures
+
+
+class FrechetLoss(torch.nn.Module):
+    def __init__(self):
+        super(FrechetLoss, self).__init__()
+
+    def forward(self, generated, ground_truth):
+
+        
+        # Compute mean and covariance for generated point clouds
+        mu_g = torch.mean(generated, dim=1, keepdim=True)  # Shape: (batch_size, 1, 3)
+        centered_g = generated - mu_g  # Centered points
+        cov_g = torch.bmm(centered_g.transpose(1, 2), centered_g) / (generated.size(1) - 1)  # Shape: (batch_size, 3, 3)
+
+        # Compute mean and covariance for ground truth point clouds
+        mu_gt = torch.mean(ground_truth, dim=1, keepdim=True)  # Shape: (batch_size, 1, 3)
+        centered_gt = ground_truth - mu_gt  # Centered points
+        cov_gt = torch.bmm(centered_gt.transpose(1, 2), centered_gt) / (ground_truth.size(1) - 1)  # Shape: (batch_size, 3, 3)
+
+        mu_diff = mu_g - mu_gt  # Shape: (batch_size, 1, 3)
+        mu_diff_sq = torch.norm(mu_diff, dim=2).squeeze() ** 2  # Shape: (batch_size,)
+
+        # Covariance distance
+        cov_g_inv = torch.linalg.inv(cov_g)  # Shape: (batch_size, 3, 3)
+        cov_product = torch.bmm(cov_g_inv, cov_gt)  # Shape: (batch_size, 3, 3)
+        
+        cov_product_sqrt = torch.linalg.cholesky(cov_product + 1e-6 * torch.eye(3, device=cov_product.device).unsqueeze(0))  # Shape: (batch_size, 3, 3)
+
+        trace_term = torch.trace(cov_g + cov_gt - 2 * cov_product_sqrt)  # Shape: (batch_size,)
+
+        frechet_distance = mu_diff_sq + trace_term
+        return torch.mean(frechet_distance)
 
 class STN3d(nn.Module):
     def __init__(self, channel):
@@ -708,6 +741,8 @@ class PointTransformer(nn.Module):
         self.loss_ce = nn.CrossEntropyLoss()
         self.loss_ce_LRC = nn.CrossEntropyLoss()
         self.loss_triplet = nn.TripletMarginLoss(margin=23.0, p=2)
+        if self.config.frechet_loss:
+            self.loss_frechet = FrechetLoss()
 
     def get_triplet(self, labels, feat):
         anchors = []
@@ -862,6 +897,21 @@ class PointTransformer(nn.Module):
         fig = go.Figure(data=[scatter], layout=layout)
         i = np.random.choice(100,1)[0]
         fig.write_html(f'3d_scatterplots/{i}.html')
+    
+    def get_similarity_measure(self, generated, ground_truth):
+        B = generated.shape[0]
+        frechet_distances = torch.zeros(B)
+        
+        # Loop through each batch and compute the Fréchet distance
+        for i in range(B):
+            gen_points = generated[i].cpu().detach().numpy()  # Convert to numpy for similaritymeasures
+            gt_points = ground_truth[i].cpu().detach().numpy()  # Convert to numpy for similaritymeasures
+            
+            frechet_dist = similaritymeasures.frechet_distance(gen_points, gt_points)
+            frechet_distances[i] = frechet_dist
+        
+        return frechet_distances
+    
     def forward(self, pts):
         if self.cls_method == 'm1' or self.cls_method == 'm2' or self.cls_method == 'm3' or self.cls_method == 'm4':
             mainS, pts = pts
@@ -934,14 +984,13 @@ class PointTransformer(nn.Module):
         gt_points = neighborhood.reshape(
             B*(self.num_group), self.group_size, 3)
 
-        x = generated_points.reshape(B, -1, 3)
-        y = gt_points.reshape(B, -1, 3)
-        # for i in range(B):
-        #     if torch.isnan(x[i]).any():
-        #         self.plot_3d_scatter(y[i].unsqueeze(0))
+        g = generated_points.reshape(B, -1, 3)
+        g_t = gt_points.reshape(B, -1, 3)
+
         loss1 = self.loss_func_p1(generated_points, gt_points)
         loss2 = self.loss_func_p2(generated_points, gt_points)
-        
+        loss_frechet = self.loss_frechet(g, g_t)
+        print(loss_frechet, self.get_similarity_measure(g, g_t))
         if self.cls_method == 'm6' or self.cls_method == 'm5':
             return ret, loss1 + loss2, class_feat, LRC_feat
         return ret, loss1 + loss2, class_feat

@@ -17,7 +17,7 @@ subject_blocks=(
     "subject_ids: ['889579',  '930449']"
 )
 
-base_model_command="CUDA_VISIBLE_DEVICES=0 python main.py --config cfgs/PointGPT-M/finetune_single_streamline_hybrid.yaml --test --exp_name error_trial --exp_subset hybrid --ckpts /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/experiments/hybrid/finetune_single_streamline_hybrid/PointGPT-M/single_streamline_hybrid_250/pps256/ckpt-best.pth"
+base_model_command="CUDA_VISIBLE_DEVICES=0 python main.py --config cfgs/PointGPT-S/finetune_single_streamline_hybrid.yaml --test --exp_name error_trial --exp_subset hybrid --ckpts /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/experiments/hybrid/finetune_single_streamline_hybrid/PointGPT-S/single_streamline_hybrid_250/pps256/ckpt-best.pth"
 dice_score_command="python dice_score_scripts/dice_score_single_streamline_hybrid.py"
 # Loop through each subject_ids block
 for i in "${!subject_blocks[@]}"

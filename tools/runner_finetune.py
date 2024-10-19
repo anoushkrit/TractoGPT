@@ -129,25 +129,25 @@ def run_net(args, config, train_writer=None, val_writer=None):
             data_time.update(time.time() - batch_start_time)
             
             if config.total_bs > 1:
-                points = data.cuda()
-                label = taxonomy_ids.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 's3FSSknnTrInF' or 'qbx_goback_3L' in dataset_name or 'single_streamline' in dataset_name:
-                points = data.squeeze().cuda()
-                label = taxonomy_ids.squeeze().cuda()
+                points = data.cuda(non_blocking=True)
+                label = taxonomy_ids.cuda(non_blocking=True)
+            elif dataset_name == 's3FSSknn' or dataset_name == 's3FSSknnTrInF' or 'goback_3L' in dataset_name or 'single_streamline' in dataset_name:
+                points = data.squeeze().cuda(non_blocking=True)
+                label = taxonomy_ids.squeeze().cuda(non_blocking=True)
             elif dataset_name == 'StreamlinePatchKnn':
-                points = data.cuda()
-                label = taxonomy_ids.cuda()
+                points = data.cuda(non_blocking=True)
+                label = taxonomy_ids.cuda(non_blocking=True)
             elif dataset_name == 'streamPC':
-                mainS = extra_info.squeeze().cuda()
-                points = data.squeeze().cuda()
-                label = taxonomy_ids.squeeze().cuda()
+                mainS = extra_info.squeeze().cuda(non_blocking=True)
+                points = data.squeeze().cuda(non_blocking=True)
+                label = taxonomy_ids.squeeze().cuda(non_blocking=True)
             elif dataset_name == 's3FSSknnLRC':
-                points = data.squeeze().cuda()
-                LRC_label = extra_info.squeeze().cuda()
-                label = taxonomy_ids.squeeze().cuda()
+                points = data.squeeze().cuda(non_blocking=True)
+                LRC_label = extra_info.squeeze().cuda(non_blocking=True)
+                label = taxonomy_ids.squeeze().cuda(non_blocking=True)
             else:
-                points = data[0].cuda()
-                label = data[1].cuda()
+                points = data[0].cuda(non_blocking=True)
+                label = data[1].cuda(non_blocking=True)
 
             if npoints == 1024:
                 point_all = 1200
@@ -293,7 +293,7 @@ def validate(base_model, test_dataloader, epoch, val_writer, args, config, logge
             if 1:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 's3FSSknnLRC' or dataset_name == 's3FSSknnTrInF' or 'single_streamline' in dataset_name or 'qbx_goback_3L' in dataset_name:
+            elif dataset_name == 's3FSSknn' or dataset_name == 's3FSSknnLRC' or dataset_name == 's3FSSknnTrInF' or 'single_streamline' in dataset_name or 'goback_3L' in dataset_name:
                 points = data.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':
@@ -362,7 +362,7 @@ def validate_vote(base_model, test_dataloader, epoch, val_writer, args, config, 
             if 1:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
+            elif dataset_name == 's3FSSknn' or 'single_streamline' in dataset_name or 'goback_3L' in dataset_name:
                 points = data.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':

@@ -123,13 +123,7 @@ def load_data(args):
         return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
     return (pc_cluster, pc_cluster_labels, cluster, cluster_labels)
 
-def pc_norm(pc):
-    """ pc: NxC, return NxC """
-    centroid = np.mean(pc, axis=0)
-    pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
-    pc = pc / m
-    return pc
+
 def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args
     subject_id = indices[0].split('_')[0]      
@@ -275,10 +269,17 @@ class qbx_goback_3L(Dataset):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]
         return np.array(int_labels)
     
+    def pc_norm(self, pc):
+        """ pc: NxC, return NxC """
+        centroid = np.mean(pc, axis=0)
+        pc = pc - centroid
+        m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
+        pc = pc / m
+        return pc
     def __getitem__(self, index):
         if self.subset == 'testset':
             label = self.map_batch_labels([self.pc_cluster_labels[index]])
-            pc = self.pc_cluster[index]
+            pc = self.pc_norm(self.pc_cluster[index])
             subject = self.cluster[index][0].split('_')[0]
             streamline_idx = [int(i.split('_')[1]) for i in self.cluster[index]]
             streamlines = [list(self.streamlines[subject][i]) for i in streamline_idx]
@@ -291,11 +292,11 @@ class qbx_goback_3L(Dataset):
 
         if not self.use_custom_batch:
             label = self.map_batch_labels([self.pc_cluster_labels[index]])
-            pc = self.pc_cluster[index]
+            pc = self.pc_norm(self.pc_cluster[index])
             return torch.tensor(label).long(), [0], torch.tensor(pc).float()
         else:
             batch_label = self.map_batch_labels([self.pc_cluster_labels[i] for i in self.custom_batches[index]])
-            batch_pc = np.array([self.pc_cluster[i] for i in self.custom_batches[index]])
+            batch_pc = np.array([self.pc_norm(self.pc_cluster[i]) for i in self.custom_batches[index]])
 
             shuffle_batch = np.random.choice(len(batch_label), len(batch_label), replace=False)
             batch_label = batch_label[shuffle_batch]

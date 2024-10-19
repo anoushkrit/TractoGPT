@@ -121,6 +121,6 @@ def convert_json_to_csv(json_data, out_path):
 if __name__ == "__main__":
     pickle_path = 'predictions/pkls/test_pred_single_streamline_hybrid.pkl'
     mapping_path = 'label_int_mappings/int_label_mapping_hybrid.json'
-    output_path = 'predictions/single_GPTM_hybrid/dice_scores_single_streamline_hybrid.json'
+    output_path = 'predictions/single_GPTS_hybrid/dice_scores_single_streamline_hybrid.json'
     json_dice = calculate_hcp_scores(pickle_path, mapping_path, output_path)
     convert_json_to_csv(json_dice, output_path)

@@ -135,3 +135,8 @@ folder_path = '/scratch/anoushkrit.scee.iitmandi/github/TractoGPT'
 
 # Call the function to rename files and folders recursively
 rename_files_and_folders_recursively(folder_path)
+#%%
+import os
+a = os.listdir('/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/trainset')
+# a.reverse()
+a

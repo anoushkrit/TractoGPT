@@ -23,21 +23,21 @@ dataset:
 model:
   {
     NAME: PointTransformer,
-    trans_dim: 256,
-    depth: 9,
+    trans_dim: 384,
+    depth: 12,
     drop_path_rate: 0.1,
-    cls_dim: 32,
-    num_heads: 4,
+    cls_dim: 25,
+    num_heads: 6,
     group_size: 8,
     num_group: 64,
-    encoder_dims: 256,
+    encoder_dims: 384,
     decoder_depth: 4,
     cls_method: m0,  # for default set to 'm0'
     triplet_loss: False,
   }
 
 npoints: 256
-total_bs: 2048
+total_bs: 1
 step_per_update: 1
 max_epoch: 300
 grad_norm_clip: 10

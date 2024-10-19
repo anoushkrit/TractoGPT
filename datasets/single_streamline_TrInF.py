@@ -79,11 +79,11 @@ class single_streamline_TrInF(Dataset):
         self.num_samples_per_class_per_batch = config.num_samples_per_class_per_batch
         self.pts_per_sample = config.pts_per_sample
         self.label_mapping_path = config.label_mapping_path
-        self.custom_batch = config.custom_batch 
+        self.use_custom_batch = config.use_custom_batch 
         self.subject_ids = config.subject_ids
 
-        if self.subset == 'testset':
-            self.custom_batch = False
+        if self.subset == 'testset' or self.subset == 'validset':
+            self.use_custom_batch = False
 
         print('Processing data/dataTrInF for :',self.subset)
         self.batch_root_path = f'data/dataTrInF/single_streamline/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/batches{self.points_per_streamline}'
@@ -91,7 +91,6 @@ class single_streamline_TrInF(Dataset):
             os.makedirs(self.batch_root_path)
         
         self.load_label_mapping()
-
         self.root_path = 'data/dataTrInF/single_streamline'
 
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl'
@@ -106,11 +105,12 @@ class single_streamline_TrInF(Dataset):
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl'
         self.resampled_streamlines = self.loadORprocess(path, self.fix_pts_in_streamlines, title='resampledStreamlines')
 
-        if self.custom_batch:
+        if self.use_custom_batch:
             self.create_custom_batch()
         
         print('end : ', datetime.datetime.now())
 
+        self.itr_count = 0
     def load_label_mapping(self):
         if not os.path.exists(self.label_mapping_path):
             raise FileNotFoundError("either the path of mapping json is wrong or it does not exist")
@@ -133,28 +133,29 @@ class single_streamline_TrInF(Dataset):
     
     def create_custom_batch(self):
         # stratified sampler
-        labels, counts = np.unique(self.labels, return_counts=True)
-        self.num_batches = np.min(counts)//self.num_samples_per_class_per_batch
-        self.batch_size = len(labels)*self.num_samples_per_class_per_batch
-        # print(self.num_batches, self.batch_size)
-        if not os.path.exists(f'{self.batch_root_path}/custom_batches_{self.batch_size}'):
-            os.makedirs(f'{self.batch_root_path}/custom_batches_{self.batch_size}')
-        
-        x = np.zeros((self.batch_size, self.num_batches), dtype=np.int32)
-        for i in range(len(labels)):
-            indices = np.where(self.labels == labels[i])[0]
-            z = np.random.choice(len(indices), self.num_batches*self.num_samples_per_class_per_batch, replace=False)
-            for j in range(self.num_samples_per_class_per_batch):
-                x[i*self.num_samples_per_class_per_batch+j] = indices[z][j*self.num_batches:(j+1)*self.num_batches]
+        unique_labels, label_counts = np.unique(self.labels, return_counts=True)
 
-        for i in range(self.num_batches):
-            batch = x[:,i]
-            respective_labels = self.labels[batch]
-            with open(f'{self.batch_root_path}/custom_batches_{self.batch_size}/batch_{i}.pkl', 'wb') as f:
-                pickle.dump((batch, respective_labels),f)
+        print(f'minimum label count in complete data loaded for {self.subset}:',min(label_counts))
+        batch_size = self.num_samples_per_class_per_batch*len(unique_labels)
+        num_batches = max(int(min(label_counts)//self.num_samples_per_class_per_batch), self.config.min_batches)
+        self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
+
+        for i, label in enumerate(unique_labels):
+            label_indices = np.where(self.labels == label)[0]
+            num_samples = self.num_samples_per_class_per_batch*num_batches
+            full_rounds = num_samples//len(label_indices)
+            remainder = num_samples%len(label_indices)
+            new_label_indices = np.tile(label_indices, full_rounds)
+            if remainder > 0:
+                new_label_indices = np.concatenate((new_label_indices, np.random.choice(label_indices, remainder, replace=False)))
+            np.random.shuffle(label_indices)
+
+            label_indices = new_label_indices.reshape((num_batches, self.num_samples_per_class_per_batch))
+            self.custom_batches[:, i*self.num_samples_per_class_per_batch:(i+1)*self.num_samples_per_class_per_batch] = label_indices
     
     def hash_streamline(self, streamline):
         return sha256(streamline.tobytes()).hexdigest()
+    
     def load_subject(self,subject_data):
         """ Helper function to process streamlines for a single subject. """
         subject, data_path, sample_per_subject, samples_per_class = subject_data
@@ -246,26 +247,27 @@ class single_streamline_TrInF(Dataset):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]
         return np.array(int_labels)
     def __getitem__(self,index):
-        if not self.custom_batch:
+        if self.subset == 'testset':
             return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [self.subject_ids[index], str(self.streamlines[index])], torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
+        elif not self.use_custom_batch:
+            return torch.from_numpy(np.array(self.label_int_mapping[self.labels[index]])), [0], torch.from_numpy(np.array(self.pc_norm(self.resampled_streamlines[index]), dtype=np.float32))
 
-        with open(f'{self.batch_root_path}/custom_batches_{self.batch_size}/batch_{index}.pkl', 'rb') as f:
-            batch_streamlines_indices, batch_labels = pickle.load(f)
-        batch_pc = np.zeros((self.batch_size, self.pts_per_sample, 3))
+        else:
+            batch_streamline_idx = self.custom_batches[index]
+            batch_labels = self.map_batch_labels(self.labels[batch_streamline_idx])
+            batch_streamlines = self.resampled_streamlines[batch_streamline_idx]
+            batch_streamlines = np.array(list(map(self.pc_norm, batch_streamlines)), dtype=np.float32)
 
-        for i,idx in enumerate(batch_streamlines_indices):
-            batch_pc[i] = self.resampled_streamlines[idx].copy()
-            batch_pc[i] = batch_pc[i][np.random.choice(len(batch_pc[i]), self.pts_per_sample, replace=False)]
-            batch_pc[i] = self.pc_norm(batch_pc[i])
-        batch_labels = np.array(batch_labels)
-        mapped_labels = self.map_batch_labels(batch_labels)
-        shuffle_batch = np.random.choice(len(batch_pc),len(batch_pc), replace=False)
-        return torch.from_numpy(mapped_labels[shuffle_batch]), [0] ,torch.from_numpy(batch_pc[shuffle_batch].astype(np.float32)) 
-        # return self.streamlines, self.resampled_streamlines, self.labels
+            shuffle = np.random.choice(batch_streamlines.shape[0], batch_streamlines.shape[0], replace=False)
+
+            batch_labels = batch_labels[shuffle]
+            batch_streamlines = batch_streamlines[shuffle]
+
+            return torch.from_numpy(batch_labels), [0], torch.from_numpy(batch_streamlines)
     def __len__(self):
-        if not self.custom_batch:
+        if not self.use_custom_batch:
             return len(self.labels)
-        return self.num_batches
+        return len(self.custom_batches)
     
 #%%
 # config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/single_streamline_TrInF.yaml')
