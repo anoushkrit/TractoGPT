@@ -1,0 +1,12 @@
+NAME: single_streamline_TrInF
+path: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/
+
+# subset: testset
+points_per_streamline: 256
+pts_per_sample: 256
+samples_per_class: 50000000
+sample_per_subject: 100000000000
+min_batches: 1000
+num_samples_per_class_per_batch: 15
+label_mapping_path: label_int_mappings/label_int_mapping_TrInF_25.json
+use_custom_batch: False

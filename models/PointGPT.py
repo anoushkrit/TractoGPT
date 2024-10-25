@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import timm
+import timm, os
 from torch.autograd import Variable
 from timm.models.layers import DropPath, trunc_normal_
 import numpy as np
@@ -18,35 +18,95 @@ from models.z_order import *
 import similaritymeasures
 
 
+# class FrechetLoss(torch.nn.Module):
+#     def __init__(self):
+#         super(FrechetLoss, self).__init__()
+
+#     def forward(self, generated, ground_truth):
+
+        
+#         # Compute mean and covariance for generated point clouds
+#         mu_g = torch.mean(generated, dim=1, keepdim=True)  # Shape: (batch_size, 1, 3)
+#         centered_g = generated - mu_g  # Centered points
+#         cov_g = torch.bmm(centered_g.transpose(1, 2), centered_g) / (generated.size(1) - 1)  # Shape: (batch_size, 3, 3)
+
+#         # Compute mean and covariance for ground truth point clouds
+#         mu_gt = torch.mean(ground_truth, dim=1, keepdim=True)  # Shape: (batch_size, 1, 3)
+#         centered_gt = ground_truth - mu_gt  # Centered points
+#         cov_gt = torch.bmm(centered_gt.transpose(1, 2), centered_gt) / (ground_truth.size(1) - 1)  # Shape: (batch_size, 3, 3)
+
+#         mu_diff = mu_g - mu_gt  # Shape: (batch_size, 1, 3)
+#         mu_diff_sq = torch.norm(mu_diff, dim=2).squeeze() ** 2  # Shape: (batch_size,)
+
+#         # Covariance distance
+#         cov_g_inv = torch.linalg.inv(cov_g)  # Shape: (batch_size, 3, 3)
+#         cov_product = torch.bmm(cov_g_inv, cov_gt)  # Shape: (batch_size, 3, 3)
+        
+#         cov_product_sqrt = torch.linalg.cholesky(cov_product + 1e-3 * torch.eye(3, device=cov_product.device).unsqueeze(0))  # Shape: (batch_size, 3, 3)
+
+#         trace_term = torch.trace(cov_g + cov_gt - 2 * cov_product_sqrt)  # Shape: (batch_size,)
+
+#         frechet_distance = mu_diff_sq + trace_term
+#         return torch.mean(frechet_distance)
+
 class FrechetLoss(torch.nn.Module):
     def __init__(self):
         super(FrechetLoss, self).__init__()
+    
+    def minkowski_distance(self, exp_data, num_data, p):
+        # exp_data: (m, d)
+        # num_data: (n, d)
 
+        # Compute pairwise Minkowski distance
+        # exp_data[:, None, :] creates (m, 1, d), num_data[None, :, :] creates (1, n, d)
+        diff = torch.abs(exp_data[:, None, :] - num_data[None, :, :])  # Shape: (m, n, d)
+        dist = torch.sum(diff**p, dim=2) ** (1/p)  # Minkowski distance, Shape: (m, n)
+
+        return dist
     def forward(self, generated, ground_truth):
+        """
+        code copied from similaritymeasures library
+        frechet_dist
 
+        n = len(exp_data)
+        m = len(num_data)
+        c = distance.cdist(exp_data, num_data, metric='minkowski', p=p)
+        ca = np.ones((n, m))
+        ca = np.multiply(ca, -1)
+        ca[0, 0] = c[0, 0]
+        for i in range(1, n):
+            ca[i, 0] = max(ca[i-1, 0], c[i, 0])
+        for j in range(1, m):
+            ca[0, j] = max(ca[0, j-1], c[0, j])
+        for i in range(1, n):
+            for j in range(1, m):
+                ca[i, j] = max(min(ca[i-1, j], ca[i, j-1], ca[i-1, j-1]),
+                            c[i, j])
+        return ca[n-1, m-1]
+        """
+        B = generated.size(0)
+        frechet_distance = torch.zeros(B, device=generated.device)
+        for b in range(B):
+
+            exp_data = generated[b]
+            num_data = ground_truth[b]
+            print(exp_data.shape, num_data.shape)
+            n = len(exp_data)
+            m = len(num_data)
+            c = self.minkowski_distance(exp_data, num_data, 2)
+            ca = torch.ones((n, m), device=generated.device)
+            ca = torch.mul(ca, -1)
+            ca[0, 0] = c[0, 0]
+            for i in range(1, n):
+                ca[i, 0] = max(ca[i-1, 0], c[i, 0])
+            for j in range(1, m):
+                ca[0, j] = max(ca[0, j-1], c[0, j])
+            for i in range(1, n):
+                for j in range(1, m):
+                    ca[i, j] = max(min(ca[i-1, j], ca[i, j-1], ca[i-1, j-1]),
+                                c[i, j])
+            frechet_distance[b] = ca[n-1, m-1]
         
-        # Compute mean and covariance for generated point clouds
-        mu_g = torch.mean(generated, dim=1, keepdim=True)  # Shape: (batch_size, 1, 3)
-        centered_g = generated - mu_g  # Centered points
-        cov_g = torch.bmm(centered_g.transpose(1, 2), centered_g) / (generated.size(1) - 1)  # Shape: (batch_size, 3, 3)
-
-        # Compute mean and covariance for ground truth point clouds
-        mu_gt = torch.mean(ground_truth, dim=1, keepdim=True)  # Shape: (batch_size, 1, 3)
-        centered_gt = ground_truth - mu_gt  # Centered points
-        cov_gt = torch.bmm(centered_gt.transpose(1, 2), centered_gt) / (ground_truth.size(1) - 1)  # Shape: (batch_size, 3, 3)
-
-        mu_diff = mu_g - mu_gt  # Shape: (batch_size, 1, 3)
-        mu_diff_sq = torch.norm(mu_diff, dim=2).squeeze() ** 2  # Shape: (batch_size,)
-
-        # Covariance distance
-        cov_g_inv = torch.linalg.inv(cov_g)  # Shape: (batch_size, 3, 3)
-        cov_product = torch.bmm(cov_g_inv, cov_gt)  # Shape: (batch_size, 3, 3)
-        
-        cov_product_sqrt = torch.linalg.cholesky(cov_product + 1e-6 * torch.eye(3, device=cov_product.device).unsqueeze(0))  # Shape: (batch_size, 3, 3)
-
-        trace_term = torch.trace(cov_g + cov_gt - 2 * cov_product_sqrt)  # Shape: (batch_size,)
-
-        frechet_distance = mu_diff_sq + trace_term
         return torch.mean(frechet_distance)
 
 class STN3d(nn.Module):
@@ -896,6 +956,7 @@ class PointTransformer(nn.Module):
 
         fig = go.Figure(data=[scatter], layout=layout)
         i = np.random.choice(100,1)[0]
+        os.makedirs('3d_scatterplots', exist_ok=True)
         fig.write_html(f'3d_scatterplots/{i}.html')
     
     def get_similarity_measure(self, generated, ground_truth):
@@ -989,8 +1050,9 @@ class PointTransformer(nn.Module):
 
         loss1 = self.loss_func_p1(generated_points, gt_points)
         loss2 = self.loss_func_p2(generated_points, gt_points)
-        loss_frechet = self.loss_frechet(g, g_t)
-        print(loss_frechet, self.get_similarity_measure(g, g_t))
+        if self.config.frechet_loss:
+            loss_frechet = self.loss_frechet(g, g_t)
+            print(loss_frechet, self.get_similarity_measure(g, g_t))
         if self.cls_method == 'm6' or self.cls_method == 'm5':
             return ret, loss1 + loss2, class_feat, LRC_feat
         return ret, loss1 + loss2, class_feat

@@ -1,36 +1,141 @@
 #%%
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix
-import pickle
 import json
+import pandas as pd
+import os
 
-#%%
-with open ('test_pred.pkl', 'rb') as f:
-    true_labels, predicted_labels, _ = pickle.load(f)
-# # Sample data (replace these with your actual labels)
-# true_labels = np.random.choice(['label1', 'label2', 'label3', 'label4', 'label5'], size=100)
-# predicted_labels = np.random.choice(['label1', 'label2', 'label3', 'label4', 'label5'], size=100)
-with open ('label_int_mapping_TrInF.json', 'rb') as f:
+json_path = 'predictions_new/goback_3L_streamline_GPTM_105HCP/dice_scores_fusion_105HCP.json'
+output_path = os.path.dirname(json_path)
+with open(json_path, 'r') as f:
+    json_data = json.load(f)
+mapping_path = 'label_int_mappings/label_int_mapping_105HCP.json'
+# mapping_path = 'label_int_mappings/int_label_mapping_hybrid.json'
+with open(mapping_path, 'r') as f:
     label_int_mapping = json.load(f)
-int_label_mapping = {v: k for k, v in label_int_mapping.items()}
+#     int_label_mapping = json.load(f)
+# label_int_mapping = {v: k for k, v in int_label_mapping.items()}
 
-true_labels = [int_label_mapping[i] for i in true_labels]
-predicted_labels = [int_label_mapping[i] for i in predicted_labels]
-# Create confusion matrix
-cm = confusion_matrix(true_labels, predicted_labels, labels=np.unique(true_labels))
 
-# Plot confusion matrix
-plt.figure(figsize=(12, 10))
-sns.heatmap(cm, annot=False, cmap='Blues', 
-            xticklabels=np.unique(true_labels), 
-            yticklabels=np.unique(true_labels),
-            linewidths=0.5, linecolor='black')
-plt.xlabel('Predicted')
-plt.ylabel('True')
-plt.title('Confusion Matrix')
-plt.xticks(rotation=90, ha='right')  # Rotate labels for better readability
-plt.yticks(rotation=0)  # Keep y-labels horizontal
-plt.tight_layout()  # Adjust layout to prevent clipping
-plt.savefig('plot.png')
+for i in json_data.keys():
+    json_data[i] = json_data[i][1]
+
+
+# Flatten the JSON structure into a list of dictionaries
+flattened_data = []
+for subject_id, classes in json_data.items():
+    row = {'subject_id': subject_id}
+    for class_name, scores in classes.items():
+        if class_name not in label_int_mapping.keys():
+            continue
+        for metric, value in scores.items():
+            if(metric != 'dice'):
+                continue
+            row[f'{class_name}'] = value
+    flattened_data.append(row)
+
+# Create the DataFrame
+df = pd.DataFrame(flattened_data)
+df.set_index('subject_id', inplace=True)
+df['subject_avg'] = df.mean(axis=1)
+df.loc['class_avg'] = df.mean()
+print(output_path+'/dice_scores.csv')
+df.to_csv(f'{output_path}/dice_scores.csv')
+
+
+flattened_data = []
+for subject_id, classes in json_data.items():
+    row = {'subject_id': subject_id}
+    for class_name, scores in classes.items():
+        if class_name not in label_int_mapping.keys():
+            continue
+        for metric, value in scores.items():
+            if(metric != 'overlap'):
+                continue
+            row[f'{class_name}'] = value
+    flattened_data.append(row)
+
+# Create the DataFrame
+df = pd.DataFrame(flattened_data)
+df.set_index('subject_id', inplace=True)
+df['subject_avg'] = df.mean(axis=1)
+df.loc['class_avg'] = df.mean()
+df.to_csv(f'{output_path}/overlap_scores.csv')
+
+
+flattened_data = []
+for subject_id, classes in json_data.items():
+    row = {'subject_id': subject_id}
+    for class_name, scores in classes.items():
+        if class_name not in label_int_mapping.keys():
+            continue
+        for metric, value in scores.items():
+            if(metric != 'overreach'):
+                continue
+            row[f'{class_name}'] = value
+    flattened_data.append(row)
+
+# Create the DataFrame
+df = pd.DataFrame(flattened_data)
+df.set_index('subject_id', inplace=True)
+df['subject_avg'] = df.mean(axis=1)
+df.loc['class_avg'] = df.mean()
+df.to_csv(f'{output_path}/overreach_scores.csv')
+
+
+flattened_data = []
+for subject_id, classes in json_data.items():
+    row = {'subject_id': subject_id}
+    for class_name, scores in classes.items():
+        if class_name not in label_int_mapping.keys():
+            continue
+        for metric, value in scores.items():
+            if(metric != 'precesion'):
+                continue
+            row[f'{class_name}'] = value
+    flattened_data.append(row)
+
+# Create the DataFrame
+df = pd.DataFrame(flattened_data)
+df.set_index('subject_id', inplace=True)
+df['subject_avg'] = df.mean(axis=1)
+df.loc['class_avg'] = df.mean()
+df.to_csv(f'{output_path}/precesion_scores.csv')
+
+
+flattened_data = []
+for subject_id, classes in json_data.items():
+    row = {'subject_id': subject_id}
+    for class_name, scores in classes.items():
+        if class_name not in label_int_mapping.keys():
+            continue
+        for metric, value in scores.items():
+            if(metric != 'recall'):
+                continue
+            row[f'{class_name}'] = value
+    flattened_data.append(row)
+
+# Create the DataFrame
+df = pd.DataFrame(flattened_data)
+df.set_index('subject_id', inplace=True)
+df['subject_avg'] = df.mean(axis=1)
+df.loc['class_avg'] = df.mean()
+df.to_csv(f'{output_path}/recall_scores.csv')
+
+
+flattened_data = []
+for subject_id, classes in json_data.items():
+    row = {'subject_id': subject_id}
+    for class_name, scores in classes.items():
+        if class_name not in label_int_mapping.keys():
+            continue
+        for metric, value in scores.items():
+            if(metric != 'f1-score'):
+                continue
+            row[f'{class_name}'] = value
+    flattened_data.append(row)
+
+# Create the DataFrame
+df = pd.DataFrame(flattened_data)
+df.set_index('subject_id', inplace=True)
+df['subject_avg'] = df.mean(axis=1)
+df.loc['class_avg'] = df.mean()
+df.to_csv(f'{output_path}/f1-score_scores.csv')

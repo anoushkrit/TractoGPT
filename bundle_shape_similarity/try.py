@@ -1,0 +1,185 @@
+import sys
+sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+from utils.dice import *
+import pickle
+from nibabel.streamlines.array_sequence import ArraySequence
+import numpy as np
+from dipy.io.streamline import load_tractogram
+import json
+from dipy.io.stateful_tractogram import StatefulTractogram, Space
+sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+from utils.dice import hcp_scores
+import ast
+from tqdm import tqdm
+from multiprocessing import Pool
+import os
+import pandas as pd
+import dipy
+import datetime
+from dipy.segment.bundles import ba_analysis
+from dipy.segment.bundles import bundle_adjacency
+from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
+from scipy.interpolate import CubicSpline
+from multiprocessing import Pool
+from dipy.tracking.distances import approx_polygon_track as apt
+from dipy.tracking.distances import (bundles_distances_mdf,
+                                     bundles_distances_mam)
+from dipy.segment.bundles import bundle_shape_similarity
+
+def downsample(args):
+    streamline, pts = args
+    streamline = apt(streamline,.1)
+    if len(streamline) != pts: 
+        resampled_streamline = interp_streamline((streamline, pts))
+    else:
+        resampled_streamline = streamline
+    return resampled_streamline
+
+def interp_streamline(args):
+    streamline, pts = args
+    old_points = np.linspace(0, 1, streamline.shape[0])
+    new_points = np.linspace(0, 1, pts)
+
+    # x_old = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), streamline.shape[0])
+    # y_old = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), streamline.shape[0])
+    # z_old = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), streamline.shape[0])
+
+    # x_new = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), pts)
+    # y_new = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), pts)
+    # z_new = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), pts)
+    
+    x_interp = CubicSpline(old_points, streamline[:, 0], bc_type='natural')
+    y_interp = CubicSpline(old_points, streamline[:, 1], bc_type='natural')
+    z_interp = CubicSpline(old_points, streamline[:, 2], bc_type='natural')
+    
+    resampled_streamline = np.vstack([
+        x_interp(new_points),
+        y_interp(new_points),
+        z_interp(new_points)
+    ]).T
+    
+    return resampled_streamline
+
+def choose_upORdownsample(args):
+    # streamline, pts = args
+    streamline = args
+    pts = 20
+    if pts > len(streamline):
+        return interp_streamline((streamline, pts))
+    else:
+        return downsample((streamline, pts))
+
+
+def load_pickle_data(path):
+    with open(path, 'rb') as f:
+        true_labels, predicted_labels, streamlines, subjects = pickle.load(f)
+
+    return true_labels, predicted_labels, streamlines, subjects
+
+def string_to_list(streamline):
+    
+    list_str = ','.join(streamline.split())
+    clean_list_str = list_str.replace('[,', '[').replace(',]', ']')
+    streamline = np.array(ast.literal_eval(clean_list_str))
+    
+    return streamline
+
+def get_label_mapping(path):
+    with open(path, 'r') as f:
+        int_label_mapping = json.load(f)
+    return int_label_mapping
+def calculate_ba_subject(args):
+    
+    sub, true_labels, predicted_labels, streamlines, int_label_mapping= args
+    unique_labels = np.unique(true_labels)
+    if len(unique_labels) == 0:
+        return (sub, {})
+    
+    dic = {}
+    for label in unique_labels:
+        true_streamlines = [s for s, t in zip(streamlines, true_labels) if t == label]
+        pred_streamlines = [s for s, t in zip(streamlines, predicted_labels) if t == label]
+        with Pool() as p:
+            true_streamlines = p.map(choose_upORdownsample, true_streamlines)
+            pred_streamlines = p.map(choose_upORdownsample, pred_streamlines)
+        true_streamlines = np.array(true_streamlines)
+        pred_streamlines = np.array(pred_streamlines)
+
+        print(datetime.datetime.now())
+        # dic[int_label_mapping[str(label)]] = ba_score
+    
+    return [sub, dic]
+
+
+
+def calculate_ba(pickle_path, mapping_path, output_path):
+
+    
+    true_labels, predicted_labels, streamlines, subjects = load_pickle_data(pickle_path)
+    print('----- pickle data loaded -----')
+    subjects = np.array(subjects)
+    unique_subjects = np.unique(subjects)
+    
+    with Pool() as p:
+        streamlines = p.map(string_to_list, streamlines)
+    print('----- string to list done -----')
+    eq = 0
+    for i in range(len(true_labels)):
+        if true_labels[i] == predicted_labels[i]:
+            eq += 1
+    print(f'---- Streamline Accuracy {eq/len(true_labels)*100:.4f}% ----')
+    int_label_mapping = get_label_mapping(mapping_path)
+
+    inp = [] # creating input to pass to the function while multiprocessing
+    for sub in unique_subjects:
+        subject_streamlines = [s for s,t in zip(streamlines, subjects) if t == sub]
+        true_labels_subject = [t for t, s in zip(true_labels, subjects) if s == sub]
+        predicted_labels_subject = [t for t, s in zip(predicted_labels, subjects) if s == sub]
+        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping))
+
+
+    output = {}
+    if os.path.isfile(output_path):
+        with open(output_path, 'r') as f:
+            output = json.load(f)
+    for i in range(len(inp)):
+
+        output[unique_subjects[i]] = calculate_ba_subject(inp[i])
+        output[unique_subjects[i]][0] = eq/len(true_labels)*100
+
+    # os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # with open(output_path, 'w') as f:
+    #     json.dump(output, f, indent=4)
+    return output
+
+def convert_json_to_csv(json_data, out_path):
+    output_path = out_path.split('.')[0] + '.csv'
+    for i in json_data.keys():
+        json_data[i] = json_data[i][1]
+
+    # Flatten the JSON structure into a list of dictionaries
+    flattened_data = []
+    for subject_id, classes in json_data.items():
+        row = {'subject_id': subject_id}
+        for class_name, scores in classes.items():
+            for metric, value in scores.items():
+                if(metric != 'dice'):
+                    continue
+                row[f'{class_name}'] = value
+        flattened_data.append(row)
+
+    # Create the DataFrame
+    df = pd.DataFrame(flattened_data)
+
+    # Set 'subject_id' as the index (row labels)
+    df.set_index('subject_id', inplace=True)
+
+    # Display the DataFrame
+    df.to_csv(output_path)
+    
+if __name__ == "__main__":
+    pickle_path = 'predictions/pkls/test_pred_single_streamline_hybrid.pkl'
+    mapping_path = 'label_int_mappings/int_label_mapping_hybrid.json'
+    output_path = 'predictions/goback_3L_streamline_GPTS_TrInF/dice_scores_fusion_TrInF.json'
+    json_dice = calculate_ba(pickle_path, mapping_path, output_path)
+    # convert_json_to_csv(json_dice, output_path)

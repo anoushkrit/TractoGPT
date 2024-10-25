@@ -197,7 +197,10 @@ class single_streamline_TrInF(Dataset):
 
         subjects = [subject for subject in Path(data_path).iterdir() if os.path.isdir(subject)]
         if self.subset=='testset' and type(self.config.subject_ids) == list: # using only the given subjects
+            print(self.config.subject_ids)
             subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
+        
+        print(subjects)
         
         subject_data = [(subject, data_path, self.sample_per_subject, self.samples_per_class)for subject in subjects]
 

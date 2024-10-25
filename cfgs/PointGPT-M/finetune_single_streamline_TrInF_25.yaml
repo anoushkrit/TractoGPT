@@ -6,17 +6,17 @@ dataset:
   {
     train:
       {
-        _base_: cfgs/dataset_configs/single_streamline_TrInF.yaml,
+        _base_: cfgs/dataset_configs/single_streamline_TrInF_25.yaml,
         others: { subset: "trainset" },
       },
     val:
       {
-        _base_: cfgs/dataset_configs/single_streamline_TrInF.yaml,
+        _base_: cfgs/dataset_configs/single_streamline_TrInF_25.yaml,
         others: { subset: "validset" },
       },
     test:
       {
-        _base_: cfgs/dataset_configs/single_streamline_TrInF.yaml,
+        _base_: cfgs/dataset_configs/single_streamline_TrInF_25.yaml,
         others: { subset: "testset" },
       },
   }
@@ -34,11 +34,11 @@ model:
     decoder_depth: 4,
     cls_method: m0,  # for default set to 'm0'
     triplet_loss: False,
-    frechet_loss: True,
+    frechet_loss: False,
   }
 
 npoints: 256
-total_bs: 1
+total_bs: 2048
 step_per_update: 1
 max_epoch: 300
 grad_norm_clip: 10

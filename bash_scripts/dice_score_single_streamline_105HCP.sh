@@ -1,18 +1,23 @@
 #!/bin/bash
 source ~/anaconda3/etc/profile.d/conda.sh
 # Path to your config file
-config_file="cfgs/dataset_configs/single_streamline.yaml"
+config_file="cfgs/dataset_configs/single_streamline_105HCP.yaml"
 
 # Define the subject_ids blocks (pairs of subject_ids lines to toggle between)
 subject_blocks=(
-    "subject_ids: ['599469', '622236']"
-    "subject_ids: ['679568', '673455']"
-    "subject_ids: ['715647', '761957']"
-    "subject_ids: ['786569', '802844']"
-    "subject_ids: ['889579', '930449']"
+    "subject_ids: ['622236']"
+    "subject_ids: ['679568']"
+    "subject_ids: ['673455']"
+    "subject_ids: ['715647']"
+    "subject_ids: ['761957']"
+    "subject_ids: ['786569']"
+    "subject_ids: ['802844']"
+    "subject_ids: ['889579']"
+    "subject_ids: ['930449']"
+    "subject_ids: ['599469']"
 )
 
-base_model_command="CUDA_VISIBLE_DEVICES=1 python main.py --config cfgs/PointGPT-M/finetune_single_streamline.yaml --test --exp_name error_trial --ckpts experiments/finetune_single_streamline/PointGPT-M/single_streamline_150_10000/pps256/ckpt-best.pth"
+base_model_command="CUDA_VISIBLE_DEVICES=0 python main.py --num_workers 40 --config cfgs/PointGPT-S/finetune_single_streamline_105HCP.yaml --test --exp_name error_trial --ckpts experiments/105HCP/finetune_single_streamline/PointGPT-S/single_streamline_105HCP_500/pps256/ckpt-best.pth"
 dice_score_command="python dice_score_scripts/dice_score_single_streamline_105HCP.py"
 # Loop through each subject_ids block
 for i in "${!subject_blocks[@]}"

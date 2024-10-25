@@ -33,6 +33,7 @@ model:
     encoder_dims: 384,
     decoder_depth: 4,
     triplet_loss: False,
+    frechet_loss: False,
     cls_method: 'm0'
   }
 

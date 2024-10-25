@@ -16,37 +16,55 @@ from utils.config import *
 import gc, pickle
 import copy
 from memory_profiler import profile
+from collections import defaultdict
 from .build import DATASETS
 
 #%%
 def create_clusters_subject(args):
-    data, subject_id, min_threshold_per_cluster, test = args
+    data, subject_id, streamline_threshold_per_cluster, test = args
+
+    cluster_id_to_idx_mapping = {
+        'L1': defaultdict(list),
+        'L2': defaultdict(list),
+        'L3': defaultdict(list),
+    }
+
+    for idx, cid in enumerate(data['cluster_ids_l1']):
+        cluster_id_to_idx_mapping['L1'][cid].append(idx)
+
+    for idx, cid in enumerate(data['cluster_ids_l2']):
+        cluster_id_to_idx_mapping['L2'][cid].append(idx)
+
+    for idx, cid in enumerate(data['cluster_ids_l3']):
+        cluster_id_to_idx_mapping['L3'][cid].append(idx)
+    
+    included_streamlines = np.zeros(len(data['label'])) # none included here
+    
     clusters = []
     pc_cluster_labels = []
-    included_streamlines = np.zeros(len(data['label'])) # none included here
     cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
 
     cluster_ids_l2 = []
-    for cluster_id in cluster_ids_l3[cluster_count_l3 <  min_threshold_per_cluster]:
-        cluster_ids_l2.append(data['cluster_ids_l2'][np.where(data['cluster_ids_l3'] == cluster_id)[0][0]])
+    for cluster_id in cluster_ids_l3[cluster_count_l3 <  streamline_threshold_per_cluster]:
+        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id][0]])
     cluster_ids_l2 = np.unique(cluster_ids_l2)
     cluster_count_l2 = np.zeros(len(cluster_ids_l2))
     for i,cluster_id in enumerate(cluster_ids_l2):
-        cluster_count_l2[i] = len(np.where(data['cluster_ids_l2'] == cluster_id)[0])
+        cluster_count_l2[i] = len(cluster_id_to_idx_mapping['L2'][cluster_id])
     
     cluster_ids_l1 = []
-    for cluster_id in cluster_ids_l2[cluster_count_l2 <  min_threshold_per_cluster]:
-        cluster_ids_l1.append(data['cluster_ids_l1'][np.where(data['cluster_ids_l2'] == cluster_id)[0][0]])
+    for cluster_id in cluster_ids_l2[cluster_count_l2 <  streamline_threshold_per_cluster]:
+        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id][0]])
     cluster_ids_l1 = np.unique(cluster_ids_l1)
     cluster_count_l1 = np.zeros(len(cluster_ids_l1))
     for i,cluster_id in enumerate(cluster_ids_l1):
-        cluster_count_l1[i] = len(np.where(data['cluster_ids_l1'] == cluster_id)[0])
+        cluster_count_l1[i] = len(cluster_id_to_idx_mapping['L1'][cluster_id])
     
     for cluster_id in cluster_ids_l1:
-        cluster_streamline_idx = np.where(data['cluster_ids_l1'] == cluster_id)[0]
+        cluster_streamline_idx = cluster_id_to_idx_mapping['L1'][cluster_id]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
+        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
@@ -56,10 +74,10 @@ def create_clusters_subject(args):
         pc_cluster_labels.append(label)
 
     for cluster_id in cluster_ids_l2:
-        cluster_streamline_idx = np.where(data['cluster_ids_l2'] == cluster_id)[0]
+        cluster_streamline_idx = cluster_id_to_idx_mapping['L2'][cluster_id]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
+        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
@@ -69,10 +87,10 @@ def create_clusters_subject(args):
         pc_cluster_labels.append(label)
 
     for cluster_id in cluster_ids_l3:
-        cluster_streamline_idx = np.where(data['cluster_ids_l3'] == cluster_id)[0]
+        cluster_streamline_idx = cluster_id_to_idx_mapping['L3'][cluster_id]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
+        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
@@ -83,13 +101,13 @@ def create_clusters_subject(args):
 
     return (clusters, pc_cluster_labels)
 def load_data(args):
-    pth, use_resampled_streamline, pts_per_sample, min_threshold_per_cluster, test = args
+    pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test = args
     level = 3
     subject_data = {}
     subject_id = os.path.basename(pth).split('.')[0]
+
     with open(pth, 'rb') as f:
         data = pickle.load(f)
-    
     data_x = np.array(data[0])
     subject_data['streamlines'] = data[1]
     subject_data['label'] = np.array(data[2])
@@ -97,7 +115,7 @@ def load_data(args):
     subject_data['cluster_ids_l2'] = data_x[:,level-1]
     subject_data['cluster_ids_l3'] = data_x[:,level]
 
-    cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, min_threshold_per_cluster, test))
+    cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
 
     pc_cluster = np.zeros((len(cluster), pts_per_sample, 3))
     for i in range(len(cluster)):
@@ -107,17 +125,9 @@ def load_data(args):
     for i in range(len(cluster)):
         streamline_idx = np.array([int(cluster[i][j].split('_')[1]) for j in range(len(cluster[i]))])
         cluster_labels.append(subject_data['label'][streamline_idx])
-    if test:
-        return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
-    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels)
 
-def pc_norm(pc):
-    """ pc: NxC, return NxC """
-    centroid = np.mean(pc, axis=0)
-    pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
-    pc = pc / m
-    return pc
+    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
+
 def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args
     subject_id = indices[0].split('_')[0]      
@@ -130,7 +140,6 @@ def concat_streamlines(args):
         else:
             club_streamlines = np.concatenate((club_streamlines, data['streamlines'][idx]))     
     
-    club_streamlines = pc_norm(club_streamlines)
     original_club_streamlines = copy.deepcopy(club_streamlines)
     while len(club_streamlines)+len(original_club_streamlines) < pts_per_sample:
         club_streamlines = np.concatenate((club_streamlines,original_club_streamlines))
@@ -141,6 +150,7 @@ def concat_streamlines(args):
         club_streamlines = np.concatenate((club_streamlines,original_club_streamlines[np.random.choice(len(original_club_streamlines), pts_per_sample-len(club_streamlines), replace=False)]))
     
     return np.array(club_streamlines)
+
 @DATASETS.register_module()
 class qbx_goback_3L_105HCP(Dataset):
 
@@ -263,10 +273,17 @@ class qbx_goback_3L_105HCP(Dataset):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]
         return np.array(int_labels)
     
+    def pc_norm(self, pc):
+        """ pc: NxC, return NxC """
+        centroid = np.mean(pc, axis=0)
+        pc = pc - centroid
+        m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
+        pc = pc / m
+        return pc
     def __getitem__(self, index):
         if self.subset == 'test':
             label = self.map_batch_labels([self.pc_cluster_labels[index]])
-            pc = self.pc_cluster[index]
+            pc = self.pc_norm(self.pc_cluster[index])
             subject = self.cluster[index][0].split('_')[0]
             streamline_idx = [int(i.split('_')[1]) for i in self.cluster[index]]
             streamlines = [list(self.streamlines[subject][i]) for i in streamline_idx]
@@ -279,11 +296,11 @@ class qbx_goback_3L_105HCP(Dataset):
 
         if not self.use_custom_batch:
             label = self.map_batch_labels([self.pc_cluster_labels[index]])
-            pc = self.pc_cluster[index]
+            pc = self.pc_norm(self.pc_cluster[index])
             return torch.tensor(label).long(), [0], torch.tensor(pc).float()
         else:
             batch_label = self.map_batch_labels([self.pc_cluster_labels[i] for i in self.custom_batches[index]])
-            batch_pc = np.array([self.pc_cluster[i] for i in self.custom_batches[index]])
+            batch_pc = np.array([self.pc_norm(self.pc_cluster[i]) for i in self.custom_batches[index]])
 
             shuffle_batch = np.random.choice(len(batch_label), len(batch_label), replace=False)
             batch_label = batch_label[shuffle_batch]

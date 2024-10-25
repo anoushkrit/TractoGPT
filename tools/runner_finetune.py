@@ -129,25 +129,25 @@ def run_net(args, config, train_writer=None, val_writer=None):
             data_time.update(time.time() - batch_start_time)
             
             if config.total_bs > 1:
-                points = data.cuda(non_blocking=True)
-                label = taxonomy_ids.cuda(non_blocking=True)
+                points = data.cuda()
+                label = taxonomy_ids.cuda()
             elif dataset_name == 's3FSSknn' or dataset_name == 's3FSSknnTrInF' or 'goback_3L' in dataset_name or 'single_streamline' in dataset_name:
-                points = data.squeeze().cuda(non_blocking=True)
-                label = taxonomy_ids.squeeze().cuda(non_blocking=True)
+                points = data.squeeze().cuda()
+                label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 'StreamlinePatchKnn':
-                points = data.cuda(non_blocking=True)
-                label = taxonomy_ids.cuda(non_blocking=True)
+                points = data.cuda()
+                label = taxonomy_ids.cuda()
             elif dataset_name == 'streamPC':
-                mainS = extra_info.squeeze().cuda(non_blocking=True)
-                points = data.squeeze().cuda(non_blocking=True)
-                label = taxonomy_ids.squeeze().cuda(non_blocking=True)
+                mainS = extra_info.squeeze().cuda()
+                points = data.squeeze().cuda()
+                label = taxonomy_ids.squeeze().cuda()
             elif dataset_name == 's3FSSknnLRC':
-                points = data.squeeze().cuda(non_blocking=True)
-                LRC_label = extra_info.squeeze().cuda(non_blocking=True)
-                label = taxonomy_ids.squeeze().cuda(non_blocking=True)
+                points = data.squeeze().cuda()
+                LRC_label = extra_info.squeeze().cuda()
+                label = taxonomy_ids.squeeze().cuda()
             else:
-                points = data[0].cuda(non_blocking=True)
-                label = data[1].cuda(non_blocking=True)
+                points = data[0].cuda()
+                label = data[1].cuda()
 
             if npoints == 1024:
                 point_all = 1200
@@ -469,10 +469,10 @@ def test(base_model, test_dataloader, args, config, logger=None):
     base_model.eval()  # set model to eval mode
     dataset_name = config.dataset.train._base_.NAME
 
-    if 'single_streamline' in dataset_name or dataset_name == 'qbx_goback_3L' or dataset_name == 'single_streamline':
+    if 'single_streamline' in dataset_name or "goback_3L" in dataset_name or dataset_name == 'single_streamline':
         raw_streamlines = [] # only required for single_streamline_TrInF
         subjects = []
-    if dataset_name == 'qbx_goback_3L':
+    if "qbx_goback_3L" in dataset_name:
         streamline_label = []
     test_pred = []
     test_label = []
@@ -513,10 +513,10 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
             pred = logits.argmax(-1).view(-1)
 
-            if 'single_streamline' in dataset_name:
+            if 'single_streamline' in dataset_name or 'goback_3L_streamline' in dataset_name:
                 raw_streamlines.append(list(extra_info[1]))
                 subjects.append(list(extra_info[0]))
-            if dataset_name == 'qbx_goback_3L':
+            if 'qbx_goback_3L' in dataset_name:
                 subjects.append(list(extra_info[0]))
                 streamline_label.append(list(extra_info[1]))
                 raw_streamlines.append(list(extra_info[2]))
@@ -526,10 +526,10 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
         test_pred = torch.cat(test_pred, dim=0)
         test_label = torch.cat(test_label, dim=0)
-        if dataset_name == 'qbx_goback_3L' or 'single_streamline' in dataset_name:
+        if 'goback_3L' in dataset_name or 'single_streamline' in dataset_name:
             raw_streamlines = [item for sublist in raw_streamlines for item in sublist]
             subjects = [item for sublist in subjects for item in sublist]
-        if dataset_name == 'qbx_goback_3L':
+        if 'qbx_goback_3L' in dataset_name:
             streamline_label = [item for sublist in streamline_label for item in sublist]
 
         if args.distributed:
@@ -545,17 +545,30 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
         print(len(raw_streamlines), len(subjects))
         if dataset_name == 'single_streamline_TrInF':
-            with open('predictions/pkls/test_pred_TPSS.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_single_GPTS_TrInF.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
-        if dataset_name == 'qbx_goback_3L':
-            with open('predictions/pkls/test_pred_qbx_goback_3L_GPTM.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
         if dataset_name == 'single_streamline':
-            with open('predictions/pkls/test_pred_single_streamline_105HCP.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_single_GPTS_105HCP.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
         if dataset_name == 'single_streamline_hybrid':
-            with open('predictions/pkls/test_pred_single_streamline_hybrid.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_single_GPTS_hybrid.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
+        if dataset_name == 'qbx_goback_3L':
+            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_TrInF.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
+        if dataset_name == 'qbx_goback_3L_105HCP':
+            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_105HCP.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
+        if dataset_name == 'qbx_goback_3L_hybrid':
+            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_hybrid.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
+        if dataset_name == 'goback_3L_streamline_TrInF':
+            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTM_TrInF.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
+        if dataset_name == 'goback_3L_streamline_105HCP':
+            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_105HCP.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
+        
         # print_log(f"[TEST_VOTE]", logger=logger)
         # acc = 0.
         # for time in range(1, 300):

@@ -128,7 +128,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             dataset_name = config.dataset.train._base_.NAME
             if config.total_bs > 1:
                 points = data.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or 'single_streamline' in dataset_name:
+            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or 'goback_3L' in dataset_name:
                 points = data.squeeze().cuda()
             elif dataset_name == 'ShapeNet' or dataset_name == 'UnlabeledHybrid':
                 points = data.cuda()

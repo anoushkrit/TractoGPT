@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
 from utils.dice import *
 import pickle
 from nibabel.streamlines.array_sequence import ArraySequence
@@ -5,13 +7,13 @@ import numpy as np
 from dipy.io.streamline import load_tractogram
 import json
 from dipy.io.stateful_tractogram import StatefulTractogram, Space
-import sys
 sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
 from utils.dice import hcp_scores
 import ast
 from tqdm import tqdm
 from multiprocessing import Pool
 import os
+from sklearn.metrics import classification_report
 
 
 def load_pickle_data(path):
@@ -33,7 +35,7 @@ def get_label_mapping(path):
     int_label_mapping = {int(v): k for k, v in label_int_mapping.items()}
     return int_label_mapping
 def calculate_hcp_scores_subject(args):
-    sub, true_labels, predicted_labels, streamlines, int_label_mapping= args
+    sub, true_labels, predicted_labels, streamlines, int_label_mapping, pickle_path = args
     unique_labels = np.unique(true_labels)
     if len(unique_labels) == 0:
         return (sub, {})
@@ -46,10 +48,34 @@ def calculate_hcp_scores_subject(args):
         t2 = StatefulTractogram.from_sft(ArraySequence(pred_streamlines), tractogram)
         dic[int_label_mapping[label]] = hcp_scores(t1, t2)
         
-    return (sub, dic)
+    true_labels = [int_label_mapping[t] for t in true_labels]
+    predicted_labels = [int_label_mapping[t] for t in predicted_labels]
+
+    pickle_path = pickle_path + f'{sub}.pkl'
+    os.makedirs(os.path.dirname(pickle_path), exist_ok=True)
+    with open(pickle_path, 'wb') as f:
+        pickle.dump([true_labels, predicted_labels], f)
+
+    report = classification_report(true_labels, predicted_labels, output_dict=True)
+
+    for key in report.keys():
+        if key not in dic.keys():
+            print(key)
+            continue
+        dic[key]['precesion'] = report[key]['precision']
+        dic[key]['recall'] = report[key]['recall']
+        dic[key]['f1-score'] = report[key]['f1-score']
+        dic[key]['support'] = report[key]['support']
+    
+    dic['accuracy'] = report['accuracy']
+    dic['macro avg'] = report['macro avg']
+    dic['weighted avg'] = report['weighted avg']
+
+    return [sub, dic]
 
 def calculate_hcp_scores(pickle_path, mapping_path, output_path):
 
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     true_labels, predicted_labels, streamlines, subjects = load_pickle_data(pickle_path)
     print('----- pickle data loaded -----')
     subjects = np.array(subjects)
@@ -57,18 +83,18 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
     
     with Pool() as p:
         streamlines = p.map(string_to_list, streamlines)
-    print(len(streamlines))
-    print(type(streamlines[0]), type(streamlines[0][0]))
+        
     print('----- string to list done -----')
 
     int_label_mapping = get_label_mapping(mapping_path)
 
     inp = [] # creating input to pass to the function while multiprocessing
+    pickle_path = os.path.dirname(output_path)+'/true_pred_labels/'
     for sub in unique_subjects:
         subject_streamlines = [s for s,t in zip(streamlines, subjects) if t == sub]
         true_labels_subject = [t for t, s in zip(true_labels, subjects) if s == sub]
         predicted_labels_subject = [t for t, s in zip(predicted_labels, subjects) if s == sub]
-        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping))
+        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping, pickle_path))
 
 
     # with Pool() as p:
@@ -83,13 +109,13 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
             output = json.load(f)
     for i in range(len(inp)):
         output[unique_subjects[i]] = calculate_hcp_scores_subject(inp[i])
-        print(output[unique_subjects[i]])
+        # print(output[unique_subjects[i]])
     with open(output_path, 'w') as f:
         json.dump(output, f, indent=4)
     return output
 
 if __name__ == "__main__":
-    pickle_path = 'predictions/test_pred_single_streamline_105HCP.pkl'
-    mapping_path = 'label_int_mapping.json'
-    output_path = 'predictions/dice_scores_single_streamline_105HCP.json'
+    pickle_path = 'predictions_new/pkls/test_pred_single_GPTS_105HCP.pkl'
+    mapping_path = 'label_int_mappings/label_int_mapping_105HCP.json'
+    output_path = 'predictions_new/single_GPTS_105HCP/dice_scores_single_streamline_105HCP.json'
     calculate_hcp_scores(pickle_path, mapping_path, output_path)

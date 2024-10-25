@@ -187,15 +187,18 @@ def func(args):
     with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}/{subject}.pkl", "wb") as f:
         pickle.dump((final_list, tracks, labels), f)
 
-for split in ["validset"]:
+for split in ["testset"]:
     if not os.path.exists(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/{split}"):
         os.makedirs(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/{split}")
     subjects = os.listdir(f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}')
-    subjects.reverse()
+
     for subject in subjects:
         print(subject)
         pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}/tractography'
         # print(os.listdir(pth))
+        if not os.path.exists(pth):
+            print(f"Skipping {subject}")
+            continue
         tracks, labels = load_TractoInferno(tracts_directory=pth)
         clusters = qbx_cci_clustering(tracks, labels, qbx_hierarchy, downsample=True)
         tidxs_4, cidxs_4 = make_tracks_clusters_map(clusters, level-2)

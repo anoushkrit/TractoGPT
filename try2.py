@@ -1,142 +1,127 @@
 #%%
-import pandas as pd
+import pickle
+import os
 import json
-
-# Sample JSON structure
-# {
-#     "subject1": {
-#         "classA": {"dice": 0.9, "overreach": 0.8, "overlap": 0.7},
-#         "classB": {"dice": 0.85, "overreach": 0.75, "overlap": 0.65}
-#     },
-#     "subject2": {
-#         "classA": {"dice": 0.88, "overreach": 0.77, "overlap": 0.66},
-#         "classC": {"dice": 0.92, "overreach": 0.81, "overlap": 0.71}
-#     }
-# }
-
-# Load your JSON (replace this with actual file reading if necessary)
-with open('predictions/dice_scores_qbx_goback_3L_GPTM.json', 'r') as f:
-    data = json.load(f)
-for i in data.keys():
-    data[i] = data[i][1]
-
-# Flatten the JSON structure into a list of dictionaries
-flattened_data = []
-for subject_id, classes in data.items():
-    row = {'subject_id': subject_id}
-    for class_name, scores in classes.items():
-        for metric, value in scores.items():
-            if(metric != 'dice'):
-                continue
-            row[f'{class_name}'] = value
-    flattened_data.append(row)
-
-# Create the DataFrame
-df = pd.DataFrame(flattened_data)
-
-# Set 'subject_id' as the index (row labels)
-df.set_index('subject_id', inplace=True)
-
-# Display the DataFrame
-df.to_csv('predictions/dice_scores_qbx_goback_3L_GPTM.csv')
-
-#%%
-import h5py
-def extract_hdf5_content(file, group='/'):
-    contents = {}
-    for key in file[group].keys():
-        item = file[group][key]
-        if isinstance(item, h5py.Dataset):
-            # Extract dataset
-            contents[key] = item[()]
-            print(f"Extracted dataset: {group}{key} with shape {item.shape}")
-        elif isinstance(item, h5py.Group):
-            # Recursively extract groups
-            print(f"Entering group: {group}{key}")
-            contents[key] = extract_hdf5_content(file, group + key + '/')
-    return contents
-
-file_path = '/scratch/anoushkrit.scee.iitmandi/DATA/FIESTA/7562790/data_tractoinferno_hcp_qbx.hdf5'
-f = h5py.File(file_path, 'r')
-# all_contents = extract_hdf5_content(f)
-print(f.keys())
-
-print(sorted(f['thres'].keys()))
-
-
-#%%
-# f['thres']['7500'].value
-
-
-def print_hdf5_tree(file, group='/'):
-    print(group)
-    for key in file[group].keys():
-        item = file[group][key]
-        if isinstance(item, h5py.Group):
-            print_hdf5_tree(file, group + key + '/')
-
-print_hdf5_tree(f)
-#%%
+import ast
 import numpy as np
-import plotly.graph_objs as go
-fig = go.Figure()
+from multiprocessing import Pool
+import gc
 
-# Add streamlines to the figure
-for i in range(data.shape[0]):
-    streamline = data[i]  # Each streamline is a y x 3 array
-    fig.add_trace(go.Scatter3d(
-        x=streamline[:, 0],
-        y=streamline[:, 1],
-        z=streamline[:, 2],
-        mode='lines',
-        name=f'Streamline {i + 1}'
-    ))
+root_path = 'predictions_new/pkls'
+save_path = 'predictions_new/true_pred_streamlines'
+def string_to_list(streamline):
+    list_str = ','.join(streamline.split())
+    clean_list_str = list_str.replace('[,', '[').replace(',]', ']')
+    clean_list_str = clean_list_str.replace(', dtype=float32)', '').replace('array([', '[')
+    clean_list_str = clean_list_str.replace(',,,,', ',').replace(',,,', ',').replace(',,', ',')
+    clean_list_str = clean_list_str.replace(',', ', ')
+    clean_list_str = clean_list_str.replace(', dtype=float32)', '').replace('array([', '[')
+    streamline = list(ast.literal_eval(clean_list_str))
+    
+    return streamline
 
-# Set layout
-fig.update_layout(
-    scene=dict(
-        xaxis_title='X Axis',
-        yaxis_title='Y Axis',
-        zaxis_title='Z Axis'
-    ),
-    title='3D Streamlines'
-)
 
-# Show the figure
-fig.show()
-#%%
-data.shape
-#%%
-import os
+for methods in os.listdir(root_path):
+    print(methods)
+    method_path = os.path.join(root_path, methods)
+    if not method_path.endswith('.pkl'):
+        continue
 
-def rename_files_and_folders_recursively(folder_path):
-    # Traverse all directories and files starting from folder_path
-    for root, dirs, files in os.walk(folder_path, topdown=False):
-        # Rename all files in the current directory
-        for filename in files:
-            if 'neomethod' in filename:
-                new_filename = filename.replace('neomethod', 'qbx_goback_3L')
-                old_file = os.path.join(root, filename)
-                new_file = os.path.join(root, new_filename)
-                os.rename(old_file, new_file)
-                print(f"Renamed file: {old_file} -> {new_file}")
+    if 'TrInF' in methods:
+        with open('label_int_mappings/label_int_mapping_TrInF.json', 'r') as f:
+            label_int_mapping = json.load(f)
+        int_label_mapping = {v: k for k, v in label_int_mapping.items()}
+    elif '105HCP' in methods:
+        with open('label_int_mappings/label_int_mapping_105HCP.json', 'r') as f:
+            label_int_mapping = json.load(f)
+        int_label_mapping = {v: k for k, v in label_int_mapping.items()}
+    elif 'hybrid' in methods:
+        with open('label_int_mappings/label_int_mapping_TrInF_25.json', 'r') as f:
+            label_int_mapping = json.load(f)
+        int_label_mapping = {v: k for k, v in label_int_mapping.items()}
+    else:
+        raise NotImplementedError(f'No label_int_mapping for {methods}')
+    
+    if 'qbx' not in methods:
+        with open(method_path, 'rb') as f:
+            true_labels, predicted_labels, streamlines, subjects = pickle.load(f)
+        
+        with Pool() as p:
+            streamlines = p.map(string_to_list, streamlines)
+        
+        subjects = np.array(subjects)
+        unique_subjects = np.unique(subjects)
 
-        # Rename all directories in the current directory
-        for dirname in dirs:
-            if 'neomethod' in dirname:
-                new_dirname = dirname.replace('neomethod', 'qbx_goback_3L')
-                old_dir = os.path.join(root, dirname)
-                new_dir = os.path.join(root, new_dirname)
-                os.rename(old_dir, new_dir)
-                print(f"Renamed folder: {old_dir} -> {new_dir}")
+        true_labels = [int_label_mapping[t] for t in true_labels]
+        predicted_labels = [int_label_mapping[t] for t in predicted_labels]
 
-# Specify the path to your folder
-folder_path = '/scratch/anoushkrit.scee.iitmandi/github/TractoGPT'
+        for sub in unique_subjects:
+            subject_streamlines = [s for s,t in zip(streamlines, subjects) if t == sub]
+            true_labels_subject = [t for t, s in zip(true_labels, subjects) if s == sub]
+            predicted_labels_subject = [t for t, s in zip(predicted_labels, subjects) if s == sub]
 
-# Call the function to rename files and folders recursively
-rename_files_and_folders_recursively(folder_path)
-#%%
-import os
-a = os.listdir('/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/trainset')
-# a.reverse()
-a
+            unique_true_labels_subject = np.unique(true_labels_subject)
+            for label in unique_true_labels_subject:
+                actual_streamlines = [s for s,t in zip(subject_streamlines, true_labels_subject) if t == label]
+                pred_streamlines = [s for s,t in zip(subject_streamlines, predicted_labels_subject) if t == label]
+
+                pickle_path = f'{save_path}/{"_".join(methods.split(".")[0].split("_")[2:])}/{sub}/{label}'
+                os.makedirs(pickle_path, exist_ok=True)
+                with open(f'{pickle_path}/true_streamlines.pkl', 'wb') as f:
+                    pickle.dump(actual_streamlines, f)
+                with open(f'{pickle_path}/pred_streamlines.pkl', 'wb') as f:
+                    pickle.dump(pred_streamlines, f)
+        
+        del true_labels, predicted_labels, streamlines, subjects
+        gc.collect()
+    elif 'qbx' in methods:
+        with open(method_path, 'rb') as f:
+            true_labels_str, predicted_cluster_labels, subjects_str, streamline_cluster_label_str, raw_streamlines_cluster_str = pickle.load(f)
+    
+        with Pool() as p:
+            cluster_subjects = p.map(string_to_list, subjects_str)
+        with Pool() as p:
+            streamline_cluster_label = p.map(string_to_list, streamline_cluster_label_str)
+        with Pool() as p:
+            raw_streamlines_cluster = p.map(string_to_list, raw_streamlines_cluster_str)
+
+        streamlines = []
+        predicted_labels = []
+        true_labels = []
+        subjects = []
+        for i in range(len(cluster_subjects)):
+            for j in range(len(cluster_subjects[i])):
+                streamlines.append(raw_streamlines_cluster[i][j])
+                predicted_labels.append(predicted_cluster_labels[i])
+                true_labels.append(streamline_cluster_label[i][j])
+                subjects.append(cluster_subjects[i][j])
+        subjects = np.array(subjects)
+
+        true_labels = [int_label_mapping[t] for t in true_labels]
+        predicted_labels = [int_label_mapping[t] for t in predicted_labels]
+
+        unique_subjects = np.unique(subjects)
+        for sub in unique_subjects:
+            subject_streamlines = [s for s,t in zip(streamlines, subjects) if t == sub]
+            true_labels_subject = [t for t, s in zip(true_labels, subjects) if s == sub]
+            predicted_labels_subject = [t for t, s in zip(predicted_labels, subjects) if s == sub]
+
+            unique_true_labels_subject = np.unique(true_labels_subject)
+            for label in unique_true_labels_subject:
+                actual_streamlines = [s for s,t in zip(subject_streamlines, true_labels_subject) if t == label]
+                pred_streamlines = [s for s,t in zip(subject_streamlines, predicted_labels_subject) if t == label]
+
+                pickle_path = f'{save_path}/{"_".join(methods.split(".")[0].split("_")[2:])}/{sub}/{label}'
+                os.makedirs(pickle_path, exist_ok=True)
+                with open(f'{pickle_path}/true_streamlines.pkl', 'wb') as f:
+                    pickle.dump(actual_streamlines, f)
+                with open(f'{pickle_path}/pred_streamlines.pkl', 'wb') as f:
+                    pickle.dump(pred_streamlines, f)
+        
+        del true_labels_str, predicted_cluster_labels, subjects_str, streamline_cluster_label_str, raw_streamlines_cluster_str
+        del cluster_subjects, streamline_cluster_label, raw_streamlines_cluster
+        del streamlines, predicted_labels, true_labels, subjects
+        gc.collect()
+    else:
+        raise NotImplementedError(f'No label_int_mapping for {methods}')
+                

@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
 from utils.dice import *
 import pickle
 from nibabel.streamlines.array_sequence import ArraySequence
@@ -5,11 +7,16 @@ import numpy as np
 from dipy.io.streamline import load_tractogram
 import json
 from dipy.io.stateful_tractogram import StatefulTractogram, Space
+sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
 from utils.dice import hcp_scores
 import ast
 from tqdm import tqdm
 from multiprocessing import Pool
 import os
+import pandas as pd
+import csv
+from sklearn.metrics import classification_report
+
 
 
 def load_pickle_data(path):
@@ -31,7 +38,7 @@ def get_label_mapping(path):
     int_label_mapping = {int(v): k for k, v in label_int_mapping.items()}
     return int_label_mapping
 def calculate_hcp_scores_subject(args):
-    sub, true_labels, predicted_labels, streamlines, int_label_mapping= args
+    sub, true_labels, predicted_labels, streamlines, int_label_mapping ,pickle_path= args
     unique_labels = np.unique(true_labels)
     if len(unique_labels) == 0:
         return (sub, {})
@@ -43,8 +50,31 @@ def calculate_hcp_scores_subject(args):
         t1 = StatefulTractogram.from_sft(ArraySequence(true_streamlines), tractogram)
         t2 = StatefulTractogram.from_sft(ArraySequence(pred_streamlines), tractogram)
         dic[int_label_mapping[label]] = hcp_scores(t1, t2)
-        
-    return (sub, dic)
+
+    true_labels = [int_label_mapping[t] for t in true_labels]
+    predicted_labels = [int_label_mapping[t] for t in predicted_labels]
+
+    pickle_path = pickle_path + f'{sub}.pkl'
+    os.makedirs(os.path.dirname(pickle_path), exist_ok=True)
+    with open(pickle_path, 'wb') as f:
+        pickle.dump([true_labels, predicted_labels], f)
+    
+    report = classification_report(true_labels, predicted_labels, output_dict=True)
+
+    for key in report.keys():
+        if key not in dic.keys():
+            print(key)
+            continue
+        dic[key]['precesion'] = report[key]['precision']
+        dic[key]['recall'] = report[key]['recall']
+        dic[key]['f1-score'] = report[key]['f1-score']
+        dic[key]['support'] = report[key]['support']
+    
+    dic['accuracy'] = report['accuracy']
+    dic['macro avg'] = report['macro avg']
+    dic['weighted avg'] = report['weighted avg']
+
+    return [sub, dic]
 
 def calculate_hcp_scores(pickle_path, mapping_path, output_path):
 
@@ -56,38 +86,96 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
     with Pool() as p:
         streamlines = p.map(string_to_list, streamlines)
     print(len(streamlines))
-    print(type(streamlines[0]), type(streamlines[0][0]))
     print('----- string to list done -----')
 
-    int_label_mapping = get_label_mapping(mapping_path)
+    eq = 0
+    for i in range(len(true_labels)):
+        if true_labels[i] == predicted_labels[i]:
+            eq += 1
+    print(f'---- Streamline Accuracy {eq/len(true_labels)*100:.4f}% ----')
 
+    int_label_mapping = get_label_mapping(mapping_path)
     inp = [] # creating input to pass to the function while multiprocessing
+    pickle_path = os.path.dirname(output_path)+'/true_pred_labels/'
     for sub in unique_subjects:
         subject_streamlines = [s for s,t in zip(streamlines, subjects) if t == sub]
         true_labels_subject = [t for t, s in zip(true_labels, subjects) if s == sub]
         predicted_labels_subject = [t for t, s in zip(predicted_labels, subjects) if s == sub]
-        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping))
+        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping, pickle_path))
 
 
-    # with Pool() as p:
-    #     results = p.map(calculate_hcp_scores_subject, inp)
 
-    # output = {}
-    # for sub, dic in results:
-    #     output[sub] = dic
     output = {}
     if os.path.isfile(output_path):
         with open(output_path, 'r') as f:
             output = json.load(f)
     for i in range(len(inp)):
         output[unique_subjects[i]] = calculate_hcp_scores_subject(inp[i])
-        print(output[unique_subjects[i]])
+        output[unique_subjects[i]][0] = eq/len(true_labels)*100
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, 'w') as f:
         json.dump(output, f, indent=4)
     return output
 
+def convert_json_to_csv(json_data, out_path):
+    # output_path = out_path.split('.')[0] + '.csv'
+    # for i in json_data.keys():
+    #     json_data[i] = json_data[i][1]
+
+    # # Flatten the JSON structure into a list of dictionaries
+    # flattened_data = []
+    # for subject_id, classes in json_data.items():
+    #     row = {'subject_id': subject_id}
+    #     for class_name, scores in classes.items():
+    #         for metric, value in scores.items():
+    #             if(metric != 'dice'):
+    #                 continue
+    #             row[f'{class_name}'] = value
+    #     flattened_data.append(row)
+
+    # # Create the DataFrame
+    # df = pd.DataFrame(flattened_data)
+
+    # # Set 'subject_id' as the index (row labels)
+    # df.set_index('subject_id', inplace=True)
+
+    # # Display the DataFrame
+    # df.to_csv(output_path)
+    output_path = out_path.split('.')[0] + '.csv'
+    records = []
+
+    # Iterate through the JSON data and prepare records
+    for subject, values in json_data.items():
+        # values[0] is the float (can be ignored), values[1] is the class dictionary
+        # classes = values[1]
+        for classes in values:
+
+            if type(classes) != dict or 'accuracy' in classes.keys() or 'macro avg' in classes.keys() or 'weighted avg' in classes.keys() :
+                continue
+            for class_name, metrics in classes.items():
+                # Create a dictionary for each row
+                row = {
+                    'Subject': subject,
+                    'Class': class_name,
+                    'Dice': metrics['dice'],
+                    'Overlap': metrics['overlap'],
+                    'Overreach': metrics['overreach'],
+                    'Precesion': metrics['precesion'],
+                    'Recall': metrics['recall'],
+                    'F1-Score': metrics['f1-score'],
+                    'Support': metrics['support']
+
+                }
+                records.append(row)
+
+    # Convert the list of records to a DataFrame
+    df = pd.DataFrame(records)
+    df.to_csv(output_path)
+
+
 if __name__ == "__main__":
-    pickle_path = 'predictions/test_pred_TPSS.pkl'
-    mapping_path = 'label_int_mapping_TrInF.json'
-    output_path = 'predictions/hcp_scores.json'
-    calculate_hcp_scores(pickle_path, mapping_path, output_path)
+    pickle_path = 'predictions_new/pkls/test_pred_single_GPTS_TrInF.pkl'
+    mapping_path = 'label_int_mappings/label_int_mapping_TrInF.json'
+    output_path = 'predictions_new/single_GPTS_TrInF/dice_scores_single_streamline_TrInF.json'
+    json_dice = calculate_hcp_scores(pickle_path, mapping_path, output_path)
+    # convert_json_to_csv(json_dice, output_path)

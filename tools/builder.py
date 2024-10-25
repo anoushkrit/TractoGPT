@@ -32,9 +32,7 @@ def dataset_builder(args, config):
                                                  drop_last=config.others.subset == 'train',
                                                  num_workers=int(
                                                      args.num_workers),
-                                                 worker_init_fn=worker_init_fn,
-                                                 pip_memory=True,
-                                                 non_blocking=True)
+                                                 worker_init_fn=worker_init_fn)
     return sampler, dataloader
 
 

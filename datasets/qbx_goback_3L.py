@@ -136,7 +136,7 @@ def concat_streamlines(args):
         else:
             club_streamlines = np.concatenate((club_streamlines, data['streamlines'][idx]))     
     
-    club_streamlines = pc_norm(club_streamlines)
+    # club_streamlines = pc_norm(club_streamlines)
     original_club_streamlines = copy.deepcopy(club_streamlines)
     while len(club_streamlines)+len(original_club_streamlines) < pts_per_sample:
         club_streamlines = np.concatenate((club_streamlines,original_club_streamlines))

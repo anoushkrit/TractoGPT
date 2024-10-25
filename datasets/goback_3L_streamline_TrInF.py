@@ -18,7 +18,7 @@ import copy
 from memory_profiler import profile
 from collections import defaultdict
 
-# from .build import DATASETS
+from .build import DATASETS
 
 #%%
 def downsample(args):
@@ -192,8 +192,8 @@ def concat_streamlines(args):
         club_streamlines = np.concatenate((club_streamlines,original_club_streamlines[np.random.choice(len(original_club_streamlines), pts_per_sample-len(club_streamlines), replace=False)]))
     
     return np.array(club_streamlines)
-# @DATASETS.register_module()
-class qbx_goback_3L(Dataset):
+@DATASETS.register_module()
+class goback_3L_streamline_TrInF(Dataset):
 
     def __init__(self,config):
         self.config = config
@@ -236,10 +236,26 @@ class qbx_goback_3L(Dataset):
                 self.streamlines = {i: self.streamlines[i] for i in self.streamlines.keys() if i in self.config.subject_ids}
                 self.streamline_labels = {i: self.streamline_labels[i] for i in self.streamline_labels.keys() if i in self.config.subject_ids}
                 self.cluster = [self.cluster[i] for i in range(len(self.cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
-                print(len(self.pc_cluster), len(self.pc_cluster_labels), len(self.cluster), len(self.cluster_labels))
-                print(self.streamlines.keys(), self.streamline_labels.keys())
                 self.pc_cluster = np.array(self.pc_cluster)
                 self.pc_cluster_labels = np.array(self.pc_cluster_labels)
+            
+            self.load_resampled_memmaps()
+
+            streamline_count = 0
+            for i in self.streamlines.keys():
+                streamline_count += len(self.streamlines[i])
+
+            self.streamline_to_cluster = np.zeros((streamline_count,2), dtype=np.int64)
+            start=0
+            for i, cluster in enumerate(self.cluster):
+                for j in range(len(cluster)):
+                    self.streamline_to_cluster[start+j] = [i,j]
+                start += len(cluster)
+            
+            if(start!=streamline_count):
+                print(start, streamline_count)
+
+
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             print(os.path.join(self.save_path, f'{self.subset}.pkl'))
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
@@ -275,6 +291,7 @@ class qbx_goback_3L(Dataset):
 
     def create_custom_batches(self):
         unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
+        print(label_counts)
         print('min label count: ',min(label_counts))
         batch_size = self.pc_samples_per_class_per_batch*len(unique_labels)*self.fusion_streamline_per_cluster
         num_batches = max(int(min(label_counts)//self.pc_samples_per_class_per_batch), self.min_batches)
@@ -366,6 +383,7 @@ class qbx_goback_3L(Dataset):
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
         else:
+            self.make_save_resampled_streamlines((data, subjects))
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
         del data
@@ -375,7 +393,7 @@ class qbx_goback_3L(Dataset):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]
         return np.array(int_labels)
     
-    def create_fusion(self, args):
+    def create_fusion_batch(self, args):
         batch_pc, batch_streamlines = args
         pc_pts = batch_pc.shape[1]-batch_streamlines.shape[1]
 
@@ -394,19 +412,25 @@ class qbx_goback_3L(Dataset):
         return pc
     def __getitem__(self, index):
         if self.subset == 'testset':
-            label = self.map_batch_labels([self.pc_cluster_labels[index]])
-            pc = self.pc_cluster[index]
-            subject = self.cluster[index][0].split('_')[0]
-            streamline_idx = [int(i.split('_')[1]) for i in self.cluster[index]]
-            streamlines = [list(self.streamlines[subject][i]) for i in streamline_idx]
-            streamline_labels = self.streamline_labels[subject][streamline_idx]
-            streamline_labels = list(self.map_batch_labels(streamline_labels))
-            subject = [subject]*len(streamlines)
-            return torch.tensor(label).long(), [str(subject), str(streamline_labels), str(streamlines)], torch.tensor(pc).float()
+            cluster_idx, cluster_streamline_idx = self.streamline_to_cluster[index]
+
+
+            pc = self.pc_cluster[cluster_idx]
+            subject = self.cluster[cluster_idx][0].split('_')[0]
+            streamline_idx = int(self.cluster[cluster_idx][cluster_streamline_idx].split("_")[1])
+            resampled_streamline = self.resampled_streamlines[subject][streamline_idx]
+            streamline = self.streamlines[subject][streamline_idx]
+            label = self.label_int_mapping[self.streamline_labels[subject][streamline_idx]]
+
+            fusion = self.create_fusion_batch((np.expand_dims(pc, 0), np.expand_dims(resampled_streamline, 0)))[0]
+            fusion = self.pc_norm(fusion)
+
+            return torch.tensor(label).long(), [str(subject), str(streamline)], torch.tensor(fusion).float()
             # return torch.tensor(label).long(), [str(0), str(0), str(0)], torch.tensor(pc).float()
 
 
         elif not self.use_custom_batch:
+            index = index//self.fusion_streamline_per_cluster
             pc = self.pc_cluster[index]
             subject = self.cluster[index][0].split('_')[0]
             streamline_idx = np.random.choice(self.cluster[index], 1)[0].split("_")[1]
@@ -414,7 +438,7 @@ class qbx_goback_3L(Dataset):
             label = self.streamline_labels[subject][int(streamline_idx)]
             label = self.map_batch_labels([label])
 
-            fusion = self.create_fusion((pc, streamline))
+            fusion = self.create_fusion_batch((np.expand_dims(pc, 0), np.expand_dims(streamline, 0)))[0]
 
             fusion = self.pc_norm(fusion)
 
@@ -436,7 +460,7 @@ class qbx_goback_3L(Dataset):
             batch_streamlines = np.array(batch_streamlines)
             batch_labels  = np.array(batch_labels)
             batch_labels = self.map_batch_labels(batch_labels)
-            batch_fusion = self.create_fusion((batch_pc, batch_streamlines))
+            batch_fusion = self.create_fusion_batch((batch_pc, batch_streamlines))
             batch_fusion = np.array(list(map(self.pc_norm, batch_fusion)))
 
             shuffle_batch = np.random.choice(len(batch_labels), len(batch_labels), replace=False)
@@ -447,21 +471,25 @@ class qbx_goback_3L(Dataset):
             return torch.from_numpy(batch_labels), [0], torch.from_numpy(batch_fusion.astype(np.float32))
     def __len__(self):
         if self.subset == 'testset':
-            return len(self.streamline_labels)
+            streamline_count = 0
+            for i in self.streamlines.keys():
+                streamline_count += len(self.streamlines[i])
+            return streamline_count
         elif not self.use_custom_batch:
             return len(self.pc_cluster)*self.fusion_streamline_per_cluster
         else:
             return len(self.custom_batches)
         
 #%%
-config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/goback_3L_streamline_TrInF.yaml')
-dataset = qbx_goback_3L(config)
-import time
-print('sleeping')
-time.sleep(10000000)
+# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/goback_3L_streamline_TrInF.yaml')
+# dataset = goback_3L_streamline_TrInF(config)
+# import time
+# print('sleeping')
+# time.sleep(10000000)
 #%%
 # label, streamlines, pc = dataset[1]
 # #%%
+# print(label.shape, pc.shape)
 # import plotly.graph_objects as go
 # import numpy as np
 

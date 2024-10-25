@@ -33,11 +33,12 @@ model:
     encoder_dims: 384,
     decoder_depth: 4,
     triplet_loss: False,
+    frechet_loss: False,
     cls_method: m0,  # for default set to 'm0'
   }
 
 npoints: 1024
-total_bs: 1
+total_bs: 512
 step_per_update: 1
 max_epoch: 300
 grad_norm_clip: 10

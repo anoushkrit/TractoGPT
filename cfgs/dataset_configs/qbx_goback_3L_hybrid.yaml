@@ -2,12 +2,11 @@ NAME: qbx_goback_3L_hybrid
 data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx
 
 save_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/processed_data
-subset: val
+# subset: test
 use_custom_batch: True
 pts_per_sample: 1024
-minimum_batches: 1500
-samples_per_class_per_batch: 6
+minimum_batches: 1000
+samples_per_class_per_batch: 8
 use_resampled_streamline: False
 label_mapping_path: label_int_mappings/label_int_mapping_hybrid.json
 min_threshold_per_cluster: 10
-subject_ids: all

@@ -14,6 +14,7 @@ from tqdm import tqdm
 from multiprocessing import Pool
 import os
 import pandas as pd
+from sklearn.metrics import classification_report
 
 
 def load_pickle_data(path):
@@ -35,7 +36,7 @@ def get_label_mapping(path):
     return int_label_mapping
 def calculate_hcp_scores_subject(args):
     
-    sub, true_labels, predicted_labels, streamlines, int_label_mapping= args
+    sub, true_labels, predicted_labels, streamlines, int_label_mapping, pickle_path= args
     unique_labels = np.unique(true_labels)
     if len(unique_labels) == 0:
         return (sub, {})
@@ -54,7 +55,33 @@ def calculate_hcp_scores_subject(args):
         else:
             dic[int_label_mapping[f'105HCP_{label}']] = hcp_scores(t1, t2)
         # dic[int_label_mapping[label]] = hcp_scores(t1, t2)
-        
+    
+    if 'sub' in sub:
+        true_labels = [int_label_mapping[f'TractoInferno_{t}'] for t in true_labels]
+        predicted_labels = [int_label_mapping[f'TractoInferno_{t}'] for t in predicted_labels]
+    else:
+        true_labels = [int_label_mapping[f'105HCP_{t}'] for t in true_labels]
+        predicted_labels = [int_label_mapping[f'105HCP_{t}'] for t in predicted_labels]
+
+    pickle_path = pickle_path + f'{sub}.pkl'
+    os.makedirs(os.path.dirname(pickle_path), exist_ok=True)
+    with open(pickle_path, 'wb') as f:
+        pickle.dump([true_labels, predicted_labels], f)
+
+    report = classification_report(true_labels, predicted_labels, output_dict=True)
+
+    for key in report.keys():
+        if key not in dic.keys():
+            continue
+        dic[key]['precesion'] = report[key]['precision']
+        dic[key]['recall'] = report[key]['recall']
+        dic[key]['f1-score'] = report[key]['f1-score']
+        dic[key]['support'] = report[key]['support']
+    
+    dic['accuracy'] = report['accuracy']
+    dic['macro avg'] = report['macro avg']
+    dic['weighted avg'] = report['weighted avg']
+
     return [sub, dic]
 
 def calculate_hcp_scores(pickle_path, mapping_path, output_path):
@@ -75,11 +102,12 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
     int_label_mapping = get_label_mapping(mapping_path)
 
     inp = [] # creating input to pass to the function while multiprocessing
+    pickle_path = os.path.dirname(output_path)+'/true_pred_labels/'
     for sub in unique_subjects:
         subject_streamlines = [s for s,t in zip(streamlines, subjects) if t == sub]
         true_labels_subject = [t for t, s in zip(true_labels, subjects) if s == sub]
         predicted_labels_subject = [t for t, s in zip(predicted_labels, subjects) if s == sub]
-        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping))
+        inp.append((sub, true_labels_subject, predicted_labels_subject, subject_streamlines, int_label_mapping, pickle_path))
 
 
     output = {}
@@ -119,8 +147,8 @@ def convert_json_to_csv(json_data, out_path):
     # Display the DataFrame
     df.to_csv(output_path)
 if __name__ == "__main__":
-    pickle_path = 'predictions/pkls/test_pred_single_streamline_hybrid.pkl'
+    pickle_path = 'predictions_new/pkls/test_pred_single_GPTS_hybrid.pkl'
     mapping_path = 'label_int_mappings/int_label_mapping_hybrid.json'
-    output_path = 'predictions/single_GPTS_hybrid/dice_scores_single_streamline_hybrid.json'
+    output_path = 'predictions_new/single_GPTS_hybrid/dice_scores_single_hybrid.json'
     json_dice = calculate_hcp_scores(pickle_path, mapping_path, output_path)
-    convert_json_to_csv(json_dice, output_path)
+    # convert_json_to_csv(json_dice, output_path)
