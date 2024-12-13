@@ -1,0 +1,137 @@
+{
+    "AF_L": {
+        "dice": 0.6427872062663186,
+        "overlap": 0.6443117690357406,
+        "overreach": 0.36043183119326083
+    },
+    "OR_ML_L": {
+        "dice": 0.5834259180127055,
+        "overlap": 0.47908674090015907,
+        "overreach": 0.16323570693365771
+    },
+    "FX_L": {
+        "dice": 0.41766771391609686,
+        "overlap": 0.4478203434610304,
+        "overreach": 0.6965653896961691
+    },
+    "POPT_R": {
+        "dice": 0.4861575782079143,
+        "overlap": 0.7920495339722688,
+        "overreach": 1.4663570793399863
+    },
+    "UF_L": {
+        "dice": 0.540809968847352,
+        "overlap": 0.8294754724994691,
+        "overreach": 1.2380547887024846
+    },
+    "MCP": {
+        "dice": 0.6358607778061441,
+        "overlap": 0.8053893829156562,
+        "overreach": 0.727836162759364
+    },
+    "CC_Fr_2": {
+        "dice": 0.0036516776614582856,
+        "overlap": 0.016109447097870964,
+        "overreach": 7.806929490811949
+    },
+    "AF_R": {
+        "dice": 0.2818797049654019,
+        "overlap": 0.22976323292425932,
+        "overreach": 0.4004586587331102
+    },
+    "SLF_R": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "FPT_L": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "CG_R": {
+        "dice": 0.0005599776008959642,
+        "overlap": 0.00040663394231607076,
+        "overreach": 0.45191553632112463
+    },
+    "CC_Oc": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "PYT_L": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "ILF_R": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "FPT_R": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "SLF_L": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "POPT_L": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "OR_ML_R": {
+        "dice": 0.07501523747011112,
+        "overlap": 0.14360078980434393,
+        "overreach": 2.6849757673667205
+    },
+    "FX_R": {
+        "dice": 0.00011176722612372631,
+        "overlap": 5.983246908655764e-05,
+        "overreach": 0.07060231352213801
+    },
+    "CC_Pa": {
+        "dice": 0.11062128357596883,
+        "overlap": 0.12571361994640567,
+        "overreach": 1.1471513456833276
+    },
+    "CC_Pr_Po": {
+        "dice": 0.03781539679471247,
+        "overlap": 0.3173180905298934,
+        "overreach": 15.465162984705701
+    },
+    "ILF_L": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "PYT_R": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "IFOF_L": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "UF_R": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    },
+    "CC_Fr_1": {
+        "dice": 0.13557244828671272,
+        "overlap": 0.387118131088622,
+        "overreach": 4.323749172420316
+    },
+    "CG_L": {
+        "dice": 0.0,
+        "overlap": 0.0,
+        "overreach": null
+    }
+}

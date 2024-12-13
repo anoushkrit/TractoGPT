@@ -42,7 +42,10 @@ def calculate_hcp_scores_subject(args):
     unique_labels = np.unique(true_labels)
     if len(unique_labels) == 0:
         return (sub, {})
-    tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/{sub}/tractography/{sub}__{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
+    if 'sub' in sub:
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/{sub}/tractography/{sub}__{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
+    else:
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/test/{sub}/tracts/{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
     dic = {}
     for label in unique_labels:
         true_streamlines = [s for s, t in zip(streamlines, true_labels) if t == label]
@@ -174,8 +177,8 @@ def convert_json_to_csv(json_data, out_path):
 
 
 if __name__ == "__main__":
-    pickle_path = 'predictions_new/pkls/test_pred_single_GPTS_TrInF.pkl'
-    mapping_path = 'label_int_mappings/label_int_mapping_TrInF.json'
-    output_path = 'predictions_new/single_GPTS_TrInF/dice_scores_single_streamline_TrInF.json'
+    pickle_path = 'predictions_new/pkls/test_pred_single_GPTM_TrInF__105HCP.pkl'
+    mapping_path = 'label_int_mappings/label_int_mapping_105HCP_23.json'
+    output_path = 'predictions_new/single_GPTM_TrInF_105HCP/dice_scores_single_streamline_TrInF__105HCP.json'
     json_dice = calculate_hcp_scores(pickle_path, mapping_path, output_path)
     # convert_json_to_csv(json_dice, output_path)

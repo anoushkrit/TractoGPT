@@ -1,0 +1,16 @@
+NAME: goback_3L_streamline_TrInF
+data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF23/qbx
+
+save_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF23/qbx/processed_data
+
+# subset: test
+use_custom_batch: True
+pts_per_sample: 1024
+minimum_batches: 500
+pts_per_streamline: 256
+pc_samples_per_class_per_batch: 2
+fusion_streamline_per_cluster: 5
+use_resampled_streamline: False
+label_mapping_path: label_int_mappings/label_int_mapping_TrInF_23.json
+streamline_threshold_per_cluster: 10
+subject_ids: ['sub-1006']

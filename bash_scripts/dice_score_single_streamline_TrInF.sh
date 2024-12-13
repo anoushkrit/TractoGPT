@@ -1,42 +1,21 @@
 #!/bin/bash
 source ~/anaconda3/etc/profile.d/conda.sh
 # Path to your config file
-config_file="cfgs/dataset_configs/single_streamline_TrInF.yaml"
+config_file="cfgs/dataset_configs/single_streamline_TrInF_23.yaml"
 
 # Define the subject_ids blocks (pairs of subject_ids lines to toggle between)
 subject_blocks=(
-    "subject_ids: ['sub-1235']"
-    "subject_ids: ['sub-1281']"
-    "subject_ids: ['sub-1019']"
-    "subject_ids: ['sub-1047']"
-    "subject_ids: ['sub-1046']"
-    "subject_ids: ['sub-1050']"
-    "subject_ids: ['sub-1080']"
-    "subject_ids: ['sub-1135']"
-    "subject_ids: ['sub-1156']"
-    "subject_ids: ['sub-1178']"
-    "subject_ids: ['sub-1217']"
-    "subject_ids: ['sub-1061']"
-    "subject_ids: ['sub-1115']"
-    "subject_ids: ['sub-1146']"
-    "subject_ids: ['sub-1164']"
-    "subject_ids: ['sub-1191']"
-    "subject_ids: ['sub-1222']"
-    "subject_ids: ['sub-1245']"
-    "subject_ids: ['sub-1024']"  
-    "subject_ids: ['sub-1049']"
-    "subject_ids: ['sub-1066']"
-    "subject_ids: ['sub-1124']"
-    "subject_ids: ['sub-1149']"  
-    "subject_ids: ['sub-1175']"
-    "subject_ids: ['sub-1209']"
-    "subject_ids: ['sub-1232']"
-    "subject_ids: ['sub-1263']"
-    "subject_ids: ['sub-1006']"
+    # "subject_ids: ['sub-1235', 'sub-1281', 'sub-1019', 'sub-1047']"
+    "subject_ids: ['sub-1046', 'sub-1050', 'sub-1080', 'sub-1135']"
+    "subject_ids: ['sub-1156', 'sub-1178', 'sub-1217', 'sub-1061']"
+    "subject_ids: ['sub-1115', 'sub-1146', 'sub-1164', 'sub-1191']"
+    "subject_ids: ['sub-1222', 'sub-1245', 'sub-1024', 'sub-1049']"
+    "subject_ids: ['sub-1066', 'sub-1124', 'sub-1149', 'sub-1175']"
+    "subject_ids: ['sub-1209', 'sub-1232', 'sub-1263', 'sub-1006']"
 )
 
-base_model_command="CUDA_VISIBLE_DEVICES=1 python main.py --num_workers 40 --config cfgs/PointGPT-S/finetune_single_streamline_TrInF.yaml --test --exp_name error_trial --ckpts experiments/TractoInferno/finetune_single_streamline_TrInF/PointGPT-S/single_streamline_TrInF_500/pps256/ckpt-best.pth"
-dice_score_command="python dice_score_scripts/dice_score_single_streamline_TrInF.py"
+base_model_command="CUDA_VISIBLE_DEVICES=1 python main.py --num_workers 40 --config cfgs/PointGPT-M/finetune_single_streamline_105HCP_23.yaml --test --exp_name error_trial --ckpts experiments/105HCP/finetune_single_streamline_105HCP_23/PointGPT-M/single_streamline_23_500/ckpt-best.pth"
+dice_score_command="python dice_score_scripts/dice_score_single_streamline_105HCP.py"
 # Loop through each subject_ids block
 for i in "${!subject_blocks[@]}"
 do

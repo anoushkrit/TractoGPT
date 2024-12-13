@@ -188,7 +188,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             _loss = loss + 3 * loss1
             # _loss = loss + 2 * loss1
             # _loss = loss + loss1
-
+            
             try:
                 _loss.backward()
             except:
@@ -467,7 +467,7 @@ def test_net(args, config):
 def test(base_model, test_dataloader, args, config, logger=None):
 
     base_model.eval()  # set model to eval mode
-    dataset_name = config.dataset.train._base_.NAME
+    dataset_name = config.dataset.test._base_.NAME
 
     if 'single_streamline' in dataset_name or "goback_3L" in dataset_name or dataset_name == 'single_streamline':
         raw_streamlines = [] # only required for single_streamline_TrInF
@@ -545,28 +545,31 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
         print(len(raw_streamlines), len(subjects))
         if dataset_name == 'single_streamline_TrInF':
-            with open('predictions_new/pkls/test_pred_single_GPTS_TrInF.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_single_GPTM_105HCP71__TrInF32.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
         if dataset_name == 'single_streamline':
-            with open('predictions_new/pkls/test_pred_single_GPTS_105HCP.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_single_GPTM_TrInF__105HCP.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
         if dataset_name == 'single_streamline_hybrid':
             with open('predictions_new/pkls/test_pred_single_GPTS_hybrid.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
         if dataset_name == 'qbx_goback_3L':
-            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_TrInF.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_105HCP71__TrInF32.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
         if dataset_name == 'qbx_goback_3L_105HCP':
-            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_105HCP.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_TrInF__105HCP.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
         if dataset_name == 'qbx_goback_3L_hybrid':
-            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_hybrid.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTM_hybrid.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
         if dataset_name == 'goback_3L_streamline_TrInF':
-            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTM_TrInF.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_105HCP71__TrInF32.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
         if dataset_name == 'goback_3L_streamline_105HCP':
-            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_105HCP.pkl', 'wb') as f:
+            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_TrInF__105HCP.pkl', 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
+        if dataset_name == 'goback_3L_streamline_hybrid':
+            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_hybrid.pkl', 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
         
         # print_log(f"[TEST_VOTE]", logger=logger)

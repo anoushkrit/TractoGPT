@@ -1,7 +1,7 @@
 #!/bin/bash
 source ~/anaconda3/etc/profile.d/conda.sh
 # Path to your config file
-config_file="cfgs/dataset_configs/qbx_goback_3L_TrInF.yaml"
+config_file="cfgs/dataset_configs/qbx_goback_3L_TrInF_23.yaml"
 
 # Define the subject_ids blocks (pairs of subject_ids lines to toggle between)
 subject_blocks=(
@@ -14,8 +14,8 @@ subject_blocks=(
     "subject_ids: ['sub-1263' ,'sub-1006', 'sub-1222', 'sub-1245']"
 )
 
-base_model_command="CUDA_VISIBLE_DEVICES=1 python main.py --num_workers 40 --config cfgs/PointGPT-S/finetune_qbx_goback_3L_TrInF.yaml --test --exp_name error_trial --ckpts experiments/TractoInferno/finetune_qbx_goback_3L/PointGPT-S/qbx_qbx_goback_3L_1200/ckpt-best.pth"
-dice_score_command="python dice_score_scripts/dice_score_qbx_goback_3L_TrInF.py"
+base_model_command="CUDA_VISIBLE_DEVICES=1 python main.py --num_workers 40 --config cfgs/PointGPT-S/finetune_qbx_goback_3L_105HCP_23.yaml --test --exp_name error_trial --ckpts experiments/105HCP/finetune_qbx_goback_3L_105HCP_23/PointGPT-S/qbx_goback_3L_105HCP_23/ckpt-best.pth"
+dice_score_command="python dice_score_scripts/dice_score_qbx_goback_3L_105HCP.py"
 # Loop through each subject_ids block
 for i in "${!subject_blocks[@]}"
 do

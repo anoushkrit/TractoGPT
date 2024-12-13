@@ -9,3 +9,4 @@ samples_per_class_per_batch: 10
 use_resampled_streamline: False
 label_mapping_path: label_int_mappings/label_int_mapping_TrInF.json
 min_threshold_per_cluster: 10
+subject_ids: ['sub-1006']

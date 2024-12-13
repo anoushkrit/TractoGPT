@@ -65,7 +65,10 @@ def calculate_hcp_scores_subject(args):
     unique_labels = np.unique(true_labels)
     if len(unique_labels) == 0:
         return (sub, {})
-    tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/{sub}/tractography/{sub}__{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
+    if 'sub' in sub:
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/{sub}/tractography/{sub}__{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
+    else:
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/test/{sub}/tracts/{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
     dic = {}
     for label in unique_labels:
         true_streamlines = [s for s, t in zip(streamlines, true_labels) if t == label]
@@ -164,7 +167,7 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
     return output
 
 if __name__ == "__main__":
-    pickle_path = 'predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_TrInF.pkl'
-    mapping_path = 'label_int_mappings/label_int_mapping_TrInF.json'
-    output_path = 'predictions_new/qbx_goback_3L_GPTS_TrInF/dice_scores.json'
+    pickle_path = 'predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_TrInF__105HCP.pkl'
+    mapping_path = 'label_int_mappings/label_int_mapping_105HCP_23.json'
+    output_path = 'predictions_new/qbx_goback_3L_GPTS_TrInF__105HCP/dice_scores.json'
     calculate_hcp_scores(pickle_path, mapping_path, output_path)

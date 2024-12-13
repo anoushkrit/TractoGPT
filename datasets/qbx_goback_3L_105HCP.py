@@ -17,6 +17,7 @@ import gc, pickle
 import copy
 from memory_profiler import profile
 from collections import defaultdict
+import os
 from .build import DATASETS
 
 #%%
@@ -107,7 +108,11 @@ def load_data(args):
     subject_id = os.path.basename(pth).split('.')[0]
 
     with open(pth, 'rb') as f:
-        data = pickle.load(f)
+        try:
+            data = pickle.load(f)
+        except:
+            print(pth)
+            return ([], [], [], [], [], [])
     data_x = np.array(data[0])
     subject_data['streamlines'] = data[1]
     subject_data['label'] = np.array(data[2])
@@ -132,8 +137,9 @@ def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args
     subject_id = indices[0].split('_')[0]      
     indices = [int(i.split('_')[1]) for i in indices]
-    club_streamlines = np.array(data['streamlines'][indices[0]])  
-    for idx in indices[1:]:
+    club_streamlines = np.array(data['streamlines'][indices[0]]) 
+
+    for idx in indices[1:]: # club_streamlines already has the first streamline
         if use_resampled_streamline:
             pass
             # club_streamlines = np.concatenate((club_streamlines, resampled_streamlines[idx]))
@@ -182,8 +188,9 @@ class qbx_goback_3L_105HCP(Dataset):
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels= pickle.load(f)
                 for i in self.streamlines.keys():
                     self.streamlines[i] = blist(self.streamlines[i])
-            
+
             if type(self.config.subject_ids) == list:
+                print(self.cluster[0][0].split('_')[0])
                 self.pc_cluster = [self.pc_cluster[i] for i in range(len(self.pc_cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.pc_cluster_labels = [self.pc_cluster_labels[i] for i in range(len(self.pc_cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.cluster_labels = [self.cluster_labels[i] for i in range(len(self.cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
@@ -196,7 +203,7 @@ class qbx_goback_3L_105HCP(Dataset):
                 self.pc_cluster_labels = np.array(self.pc_cluster_labels)
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels = pickle.load(f)
+                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
                 print(np.unique(self.pc_cluster_labels))
         else:
             self.load_and_process_data()
@@ -232,9 +239,9 @@ class qbx_goback_3L_105HCP(Dataset):
 
     def load_and_process_data(self):
 
-        subjects = [subject for subject in Path(self.data_path).iterdir() if os.path.isfile(subject)]
-        if self.subset == 'test' and type(self.config.subject_ids) == list: # using only the given subjects
-            subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
+        subjects = [subject for subject in os.listdir(self.data_path) if os.path.isfile(os.path.join(self.data_path, subject))]
+        # if self.subset == 'test' and type(self.config.subject_ids) == list: # using only the given subjects
+        #     subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
         inp = []
         for subject in subjects:
             inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.min_threshold_per_cluster, self.subset == 'test'))
@@ -253,16 +260,16 @@ class qbx_goback_3L_105HCP(Dataset):
             self.pc_cluster_labels.extend(data[i][1])
             self.cluster.extend(data[i][2])
             self.cluster_labels.extend(data[i][3])
+            self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
             if self.subset == 'test':
-                self.streamlines[subjects[i].name.split('.')[0]] = data[i][4]
-                self.streamline_labels[subjects[i].name.split('.')[0]] = data[i][5]
+                self.streamlines[subjects[i].split('.')[0]] = data[i][4]
         
         self.pc_cluster = np.array(self.pc_cluster)
         self.pc_cluster_labels = np.array(self.pc_cluster_labels)
         
         if self.subset != 'test':
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels), f)
+                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
         else:
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
@@ -314,7 +321,7 @@ class qbx_goback_3L_105HCP(Dataset):
             return len(self.custom_batches)
         
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml')
+# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/qbx_goback_3L_105HCP_23.yaml')
 # dataset = qbx_goback_3L_105HCP(config)
 #%%
 # cnt = 0

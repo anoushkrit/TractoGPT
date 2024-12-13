@@ -1,24 +1,19 @@
 #!/bin/bash
 source ~/anaconda3/etc/profile.d/conda.sh
 # Path to your config file
-config_file="cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml"
+config_file="cfgs/dataset_configs/qbx_goback_3L_105HCP_23.yaml"
 
 # Define the subject_ids blocks (pairs of subject_ids lines to toggle between)
 subject_blocks=(
-    "subject_ids: ['622236']"
-    "subject_ids: ['679568']"
-    "subject_ids: ['673455']"
-    "subject_ids: ['715647']"
-    "subject_ids: ['761957']"
-    "subject_ids: ['786569']"
-    "subject_ids: ['802844']"
-    "subject_ids: ['889579']"
-    "subject_ids: ['930449']"
-    "subject_ids: ['599469']"
+    "subject_ids: ['622236', '679568']"
+    "subject_ids: ['673455', '715647']"
+    "subject_ids: ['761957', '786569']"
+    "subject_ids: ['802844', '889579']"
+    "subject_ids: ['930449', '599469']"
 )
 
-base_model_command="CUDA_VISIBLE_DEVICES=0 python main.py --num_workers 40 --config cfgs/PointGPT-S/finetune_qbx_goback_3L_105HCP.yaml --test --exp_name error_trial --ckpts experiments/105HCP/finetune_qbx_goback_3L_105HCP/PointGPT-S/qbx_goback_3L_105HCP/ckpt-best.pth"
-dice_score_command="python dice_score_scripts/dice_score_qbx_goback_3L_105HCP.py"
+base_model_command="CUDA_VISIBLE_DEVICES=0 python main.py --num_workers 40 --config cfgs/PointGPT-S/finetune_qbx_goback_3L_TrInF_23.yaml --test --exp_name error_trial --ckpts experiments/TractoInferno/finetune_qbx_goback_3L_TrInF_23/PointGPT-S/qbx_goback_3L_TrInF_23/ckpt-best.pth"
+dice_score_command="python dice_score_scripts/dice_score_qbx_goback_3L_TrInF.py"
 # Loop through each subject_ids block
 for i in "${!subject_blocks[@]}"
 do

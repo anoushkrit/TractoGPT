@@ -1,4 +1,0 @@
-NAME: UnlabeledHybrid
-DATA_PATH: data/HybridDatasets/pretrain
-N_POINTS: 2048
-PC_PATH: data/HybridDatasets

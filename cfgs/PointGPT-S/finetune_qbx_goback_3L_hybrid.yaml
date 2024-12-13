@@ -7,17 +7,17 @@ dataset:
     train:
       {
         _base_: cfgs/dataset_configs/qbx_goback_3L_hybrid.yaml,
-        others: { subset: "train" },
+        others: { subset: "train" , npoints: 1024},
       },
     val:
       {
         _base_: cfgs/dataset_configs/qbx_goback_3L_hybrid.yaml,
-        others: { subset: "val" },
+        others: { subset: "val" , npoints: 1024},
       },
     test:
       {
         _base_: cfgs/dataset_configs/qbx_goback_3L_hybrid.yaml,
-        others: { subset: "test" },
+        others: { subset: "test" , npoints: 1024},
       },
   }
 model:

@@ -481,7 +481,7 @@ class goback_3L_streamline_TrInF(Dataset):
             return len(self.custom_batches)
         
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/goback_3L_streamline_TrInF.yaml')
+# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/goback_3L_streamline_TrInF_23.yaml')
 # dataset = goback_3L_streamline_TrInF(config)
 # import time
 # print('sleeping')

@@ -60,15 +60,15 @@ def load_TractoInferno(tracts_directory):
     # for path in tqdm(paths):
 
     import json
-    with open('label_int_mappings/label_int_mapping_hybrid.json', 'r') as f:
+    with open('label_int_mappings/label_int_mapping_105HCP_23.json', 'r') as f:
         label_int_mapping = json.load(f)
     
     for path in paths:
         subject = re.search(r'\d{4}', str(path)).group()
         # print(subject)
         if path.is_file() and path.suffix == '.trk':
-            label = re.search(r'__(.*?)\.trk', str(path)).group(1)
-            # label = str(path).split('/')[-1].split('.')[0]
+            # label = re.search(r'__(.*?)\.trk', str(path)).group(1)
+            label = str(path).split('/')[-1].split('.')[0]
             if label not in label_int_mapping.keys():
                 continue
             tractogram = load_trk(str(path), "same", bbox_valid_check=False)
@@ -187,14 +187,15 @@ def func(args):
     with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}/{subject}.pkl", "wb") as f:
         pickle.dump((final_list, tracks, labels), f)
 
-for split in ["testset"]:
-    if not os.path.exists(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/{split}"):
-        os.makedirs(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/{split}")
-    subjects = os.listdir(f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}')
+for split in ["train", "val", "test"]:
+    if not os.path.exists(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}"):
+        os.makedirs(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}")
+    subjects = os.listdir(f'/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/{split}')
 
     for subject in subjects:
         print(subject)
-        pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}/tractography'
+        # pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}/tractography'
+        pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/{split}/{subject}/tracts'
         # print(os.listdir(pth))
         if not os.path.exists(pth):
             print(f"Skipping {subject}")
@@ -217,7 +218,7 @@ for split in ["testset"]:
         final_merged_df.columns = ['track_indices', '3last', '2last', 'last']
         final_list = final_merged_df.values.tolist()
 
-        print('saving file at', f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/{split}/{subject}.pkl")
-        with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/{split}/{subject}.pkl", "wb") as f:
+        print('saving file at', f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}/{subject}.pkl")
+        with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}/{subject}.pkl", "wb") as f:
             pickle.dump((final_list, tracks, labels), f)
 

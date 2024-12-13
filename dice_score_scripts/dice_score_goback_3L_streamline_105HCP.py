@@ -33,7 +33,7 @@ def string_to_list(streamline):
 def get_label_mapping(path):
     with open(path, 'r') as f:
         label_int_mapping = json.load(f)
-    int_label_mapping = {str(v): k for k, v in label_int_mapping.items()}
+    int_label_mapping = {int(v): k for k, v in label_int_mapping.items()}
     return int_label_mapping
 def calculate_hcp_scores_subject(args):
     
@@ -43,9 +43,9 @@ def calculate_hcp_scores_subject(args):
         return (sub, {})
 
     if 'sub' in sub:
-        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/{sub}/tractography/{sub}__{int_label_mapping[str(unique_labels[0])]}.trk", "same", bbox_valid_check=False)
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/testset/{sub}/tractography/{sub}__{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
     else:
-        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/test/{sub}/tracts/{int_label_mapping[f'{unique_labels[0]}']}.trk", "same", bbox_valid_check=False)
+        tractogram = load_tractogram(f"/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/test/{sub}/tracts/{int_label_mapping[unique_labels[0]]}.trk", "same", bbox_valid_check=False)
     dic = {}
     for label in unique_labels:
         true_streamlines = [s for s, t in zip(streamlines, true_labels) if t == label]
@@ -53,13 +53,13 @@ def calculate_hcp_scores_subject(args):
         t1 = StatefulTractogram.from_sft(ArraySequence(true_streamlines), tractogram)
         t2 = StatefulTractogram.from_sft(ArraySequence(pred_streamlines), tractogram)
         if 'sub' in sub:
-            dic[int_label_mapping[f'{label}']] = hcp_scores(t1, t2)
+            dic[int_label_mapping[label]] = hcp_scores(t1, t2)
         else:
-            dic[int_label_mapping[f'{label}']] = hcp_scores(t1, t2)
+            dic[int_label_mapping[label]] = hcp_scores(t1, t2)
         # dic[int_label_mapping[label]] = hcp_scores(t1, t2)
     
-    true_labels = [int_label_mapping[str(t)] for t in true_labels]
-    predicted_labels = [int_label_mapping[str(t)] for t in predicted_labels]
+    true_labels = [int_label_mapping[int(t)] for t in true_labels]
+    predicted_labels = [int_label_mapping[int(t)] for t in predicted_labels]
 
     pickle_path = pickle_path + f'{sub}.pkl'
     os.makedirs(os.path.dirname(pickle_path), exist_ok=True)
@@ -99,7 +99,6 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
             eq += 1
     print(f'---- Streamline Accuracy {eq/len(true_labels)*100:.4f}% ----')
     int_label_mapping = get_label_mapping(mapping_path)
-
     inp = [] # creating input to pass to the function while multiprocessing
     pickle_path = os.path.dirname(output_path) + '/true_pred_labels/'
     for sub in unique_subjects:
@@ -147,8 +146,8 @@ def convert_json_to_csv(json_data, out_path):
     df.to_csv(output_path)
     
 if __name__ == "__main__":
-    pickle_path = 'predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_105HCP.pkl'
-    mapping_path = 'label_int_mappings/label_int_mapping_105HCP.json'
-    output_path = 'predictions_new/goback_3L_streamline_GPTS_105HCP/dice_scores_fusion_105HCP.json'
+    pickle_path = 'predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_105HCP__TrInF.pkl'
+    mapping_path = 'label_int_mappings/label_int_mapping_TrInF_23.json'
+    output_path = 'predictions_new/goback_3L_streamline_GPTS_105HCP__TrInF/dice_scores_fusion_105HCP__TrInF.json'
     json_dice = calculate_hcp_scores(pickle_path, mapping_path, output_path)
     # convert_json_to_csv(json_dice, output_path)

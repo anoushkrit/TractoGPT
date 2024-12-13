@@ -16,6 +16,7 @@ from models.GPT import GPT_extractor, GPT_generator
 import math
 from models.z_order import *
 import similaritymeasures
+import pickle
 
 
 # class FrechetLoss(torch.nn.Module):
@@ -977,7 +978,13 @@ class PointTransformer(nn.Module):
         if self.cls_method == 'm1' or self.cls_method == 'm2' or self.cls_method == 'm3' or self.cls_method == 'm4':
             mainS, pts = pts
         
+        i = np.random.choice(10,1)[0]
+        os.makedirs(f'patches/cluster/{i}', exist_ok=True)
+        with open(f'patches/cluster/{i}/before.pkl', 'wb') as f:
+            pickle.dump(pts[0], f)
         neighborhood, center = self.group_divider(pts)
+        with open(f'patches/cluster/{i}/after.pkl', 'wb') as f:
+            pickle.dump(neighborhood[0], f)
         group_input_tokens = self.encoder(neighborhood)  # B G N
         # self.plot_3d_scatter(pts[0])
         B, L, _ = group_input_tokens.shape

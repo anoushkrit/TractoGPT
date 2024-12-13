@@ -16,8 +16,8 @@ dataset:
       },
     test:
       {
-        _base_: cfgs/dataset_configs/single_streamline_105HCP.yaml,
-        others: { subset: "test" },
+        _base_: cfgs/dataset_configs/single_streamline_TrInF.yaml,
+        others: { subset: "testset" },
       },
   }
 model:

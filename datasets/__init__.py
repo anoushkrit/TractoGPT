@@ -18,4 +18,4 @@ import datasets.single_streamline_hybrid
 import datasets.goback_3L_streamline_TrInF
 import datasets.goback_3L_streamline_105HCP
 import datasets.qbx_goback_3L_hybrid
-import datasets.qbx_goback_3L_hybrid
+import datasets.goback_3L_streamline_hybrid

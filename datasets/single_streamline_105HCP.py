@@ -155,7 +155,7 @@ class single_streamline(Dataset):
     
     def load_subject(self,subject_data):
         """ Helper function to process streamlines for a single subject. """
-        subject, data_path, sample_per_subject, samples_per_class = subject_data
+        subject, data_path, sample_per_subject, samples_per_class, label_int_mapping = subject_data
         subject_id = subject.name
         streamlines = []
         streamline_to_class = {}
@@ -165,7 +165,9 @@ class single_streamline(Dataset):
         class_labels = [clss for clss in class_labels if clss.stem in self.label_int_mapping.keys()]
         for clss in class_labels:
             class_name = clss.stem
-
+            if class_name not in label_int_mapping.keys():
+                continue
+            
             cls_path = os.path.join(data_path, subject, 'tracts', clss)
             loaded_streamlines = load_stream(cls_path)
             if len(loaded_streamlines) > samples_per_class:
@@ -193,7 +195,7 @@ class single_streamline(Dataset):
             subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
         print(subjects)
         subject_data = [
-            (subject, data_path, self.sample_per_subject, self.samples_per_class)
+            (subject, data_path, self.sample_per_subject, self.samples_per_class, self.label_int_mapping)
             for subject in subjects
         ]
 

@@ -198,8 +198,8 @@ def convert_json_to_csv(json_data, out_path):
     df.to_csv(output_path)
 
 if __name__ == "__main__":
-    pickle_path = 'predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_hybrid.pkl'
+    pickle_path = 'predictions_new/pkls/test_pred_qbx_goback_3L_GPTM_hybrid.pkl'
     mapping_path = 'label_int_mappings/int_label_mapping_hybrid.json'
-    output_path = 'predictions_new/qbx_goback_3L_GPTS_hybrid/qbx_goback_3L_hybrid_GPTS.json'
+    output_path = 'predictions_new/qbx_goback_3L_GPTM_hybrid/qbx_goback_3L_hybrid_GPTM.json'
     json_dice = calculate_hcp_scores(pickle_path, mapping_path, output_path)
     # convert_json_to_csv(json_dice, output_path)

@@ -13,4 +13,3 @@ use_resampled_streamline: False
 label_mapping_path: label_int_mappings/label_int_mapping_105HCP.json
 streamline_threshold_per_cluster: 10
 # subject_ids: ['sub-1068','sub-1078', 'sub-1088']
-subject_ids: ['622236']

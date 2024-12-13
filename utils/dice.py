@@ -54,7 +54,6 @@ def hcp_scores(pred_tractogram=None, gt_tractogram=None):
             dice = 2 * tp / float(2 * tp + fp + fn)
 
         return {"dice": dice, "overlap": overlap, "overreach": overreach}
-    
     return compute_voxel_pairwise_measures(pred_tractogram, gt_tractogram)
 
 if __name__ == "__main__":

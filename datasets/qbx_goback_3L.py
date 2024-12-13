@@ -190,6 +190,7 @@ class qbx_goback_3L(Dataset):
                 print(self.streamlines.keys(), self.streamline_labels.keys())
                 self.pc_cluster = np.array(self.pc_cluster)
                 self.pc_cluster_labels = np.array(self.pc_cluster_labels)
+            print('number of unique classes:',len(np.unique(self.pc_cluster_labels)))
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels = pickle.load(f)

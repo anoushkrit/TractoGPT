@@ -215,7 +215,7 @@ class goback_3L_streamline_hybrid(Dataset):
         if self.streamline_threshold_per_cluster < self.fusion_streamline_per_cluster:
             raise ValueError('streamline_threshold_per_cluster should be greater than or equal to fusion_streamline_per_cluster')
         
-        if self.subset == 'validset' or self.subset == 'testset':
+        if self.subset == 'val' or self.subset == 'test':
             self.use_custom_batch = False
 
         if self.use_resampled_streamline:
@@ -223,7 +223,7 @@ class goback_3L_streamline_hybrid(Dataset):
 
         self.label_int_mapping = self.load_label_mapping()
         print(datetime.datetime.now())
-        if self.subset == 'testset' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
+        if self.subset == 'test' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels= pickle.load(f)
                 for i in self.streamlines.keys():
@@ -350,12 +350,12 @@ class goback_3L_streamline_hybrid(Dataset):
     def load_and_process_data(self):
 
         subjects = [subject for subject in os.listdir(self.data_path) if os.path.isfile(os.path.join(self.data_path, subject))]
-        if self.subset == 'testset' and type(self.config.subject_ids) == list: # using only the given subjects
+        if self.subset == 'test' and type(self.config.subject_ids) == list: # using only the given subjects
             subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
             
         inp = []
         for subject in subjects:
-            inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.streamline_threshold_per_cluster, self.subset == 'testset'))
+            inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.streamline_threshold_per_cluster, self.subset == 'test'))
         with Pool() as p:
             print('inside pool')
             data = p.map(load_data, inp)
@@ -372,14 +372,14 @@ class goback_3L_streamline_hybrid(Dataset):
             self.cluster.extend(data[i][2])
             self.cluster_labels.extend(data[i][3])
             self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
-            if self.subset == 'testset':
+            if self.subset == 'test':
                 self.streamlines[subjects[i].split('.')[0]] = data[i][4]
         
 
         self.pc_cluster = np.array(self.pc_cluster)
         self.pc_cluster_labels = np.array(self.pc_cluster_labels)
                 
-        if self.subset != 'testset':
+        if self.subset != 'test':
             self.make_save_resampled_streamlines((data, subjects))
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
@@ -412,7 +412,7 @@ class goback_3L_streamline_hybrid(Dataset):
         pc = pc / m
         return pc
     def __getitem__(self, index):
-        if self.subset == 'testset':
+        if self.subset == 'test':
             cluster_idx, cluster_streamline_idx = self.streamline_to_cluster[index]
 
 
@@ -471,7 +471,7 @@ class goback_3L_streamline_hybrid(Dataset):
 
             return torch.from_numpy(batch_labels), [0], torch.from_numpy(batch_fusion.astype(np.float32))
     def __len__(self):
-        if self.subset == 'testset':
+        if self.subset == 'test':
             streamline_count = 0
             for i in self.streamlines.keys():
                 streamline_count += len(self.streamlines[i])

@@ -11,4 +11,4 @@ num_samples_per_class_per_batch: 10
 label_mapping_path: label_int_mappings/label_int_mapping_TrInF.json
 use_custom_batch: True
 # subject_ids: all
-subject_ids: ['sub-1024']
+subject_ids: ['sub-1006']
