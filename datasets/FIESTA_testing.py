@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 from scipy.interpolate import CubicSpline
 from multiprocessing import Pool, cpu_count, set_start_method
 # from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.config import *
 import copy
 from memory_profiler import profile

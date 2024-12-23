@@ -17,7 +17,7 @@ from functools import partial
 # from dipy.se
 from dipy.tracking.distances import approx_polygon_track as apt
 # sys.path.append('../')
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.config import *
 import gc, pickle
 from dipy.tracking.streamline import select_random_set_of_streamlines
@@ -430,7 +430,7 @@ class s3FSSknnTrInF(Dataset):
         # return self.num_batches
     
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/s3FSSknnTrInF.yaml')
+# config = cfg_from_yaml_file('./TractoGPT/cfgs/dataset_configs/s3FSSknnTrInF.yaml')
 # x = s3FSSknnTrInF(config)
 # #%%
 # a,b,_,_,_,_,_ = x[0]

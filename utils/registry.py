@@ -270,7 +270,6 @@ def build_from_cfg(cfg, registry, default_args=None):
         cfg = config.merge_new_config(cfg, default_args)
 
     obj_type = cfg.get('NAME')
-    print(registry)
     if isinstance(obj_type, str):
         obj_cls = registry.get(obj_type)
         if obj_cls is None:

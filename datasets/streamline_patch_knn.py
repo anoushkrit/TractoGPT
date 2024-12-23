@@ -20,6 +20,7 @@ import json
 # from utils.funcs import cluster2tract_label,obtain_TractClusterMapping
 from utils.config import *
 from multiprocessing import Pool, cpu_count
+from utils.logger import *
 # import faiss
 # from memory_profiler import profile
 #%%
@@ -50,9 +51,9 @@ class StreamlinePatchKnn(Dataset):
         self.resampled_streamlines = np.array(self.interpolate_streamline()) # increased points in streamlines
         # self.resampled_streamlines = self.streamlines
 
-        print('interpolation completed')
+        print_log('[DATASETS] interpolation completed', logger = 'StreamlinePatchKNN')
         self.neighbour_indices = np.array(self.get_local_streamlines_subjectwise_CD())
-        print('neighbours completed')
+        print_log('[DATASETS] neighbour finding completed', logger = 'StreamlinePatchKNN')
         self.itr_cnt = 0
 
         del self.streamlines
@@ -94,15 +95,11 @@ class StreamlinePatchKnn(Dataset):
         return resampled_streamline
     def interpolate_streamline(self):
         a,b,c = np.shape(self.streamlines)
-        # xyz = [(j,i) for i,j in enumerate(self.streamlines)]
-        # print('start')
-        print(datetime.datetime.now())
+
         with Pool(processes=cpu_count()) as pool:
             resampled_streamlines = pool.map(self.interp_streamline, self.streamlines)
 
         resampled_streamlines = np.array(resampled_streamlines)
-        print(datetime.datetime.now())
-        # print(resampled_streamlines)
         return resampled_streamlines
 
     def get_local_streamlines(self, data):
@@ -210,7 +207,7 @@ class StreamlinePatchKnn(Dataset):
             chamfer_matrix = torch.zeros((num_streamlines, num_streamlines), device='cuda')
 
             for j in range(num_streamlines):
-                # if(i%10000 == 0): print(i)
+
                 chamfer_matrix[j, :] = self.chamfer_distance(batch[j].unsqueeze(0), batch)
 
             # Use the Chamfer distance matrix in NearestNeighbors with precomputed metric
@@ -247,14 +244,6 @@ class StreamlinePatchKnn(Dataset):
         pc = pc - centroid
         m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
         pc = pc / m
-        return pc
-    
-    # def get_tract_label(self, cluster_label):
-
-    #     ordered_tract_cluster_mapping_dict = obtain_TractClusterMapping('FiberClusterAnnotation_Updated20230110.xlsx')  # {'tract name': ['cluster_xxx','cluster_xxx', ... 'cluster_xxx']} 
-    #     cur_label = cluster2tract_label(cluster_label, ordered_tract_cluster_mapping_dict, output_lst=False)
-    #     # print(cur_label)
-    #     return cur_label
 
     def __getitem__(self,index):
 
@@ -268,8 +257,6 @@ class StreamlinePatchKnn(Dataset):
         streamlines = streamlines.reshape(self.num_local_neighbours*self.points_per_streamline, 3)
         streamlines = self.pc_norm(streamlines)
 
-        # tract_label = self.get_tract_label(label)
-        # print(tract_label)
         return label , 0 , torch.from_numpy(streamlines.astype(np.float32))
 
     def  __len__(self):

@@ -11,8 +11,9 @@ from torch.utils.data import Dataset
 from scipy.interpolate import CubicSpline
 from multiprocessing import Pool, cpu_count, set_start_method
 # from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
 from utils.config import *
+from utils.logger import *
+from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
 import gc, pickle
 import copy
 from memory_profiler import profile
@@ -111,10 +112,9 @@ def load_data(args):
         try:
             data = pickle.load(f)
         except:
-            print(pth)
             return ([], [], [], [], [], [])
     data_x = np.array(data[0])
-    subject_data['streamlines'] = data[1]
+    subject_data['streamlines'] = blist(data[1])
     subject_data['label'] = np.array(data[2])
     subject_data['cluster_ids_l1'] = data_x[:,level-2]
     subject_data['cluster_ids_l2'] = data_x[:,level-1]
@@ -131,7 +131,10 @@ def load_data(args):
         streamline_idx = np.array([int(cluster[i][j].split('_')[1]) for j in range(len(cluster[i]))])
         cluster_labels.append(subject_data['label'][streamline_idx])
 
-    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
+    if test:
+        return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
+    else:
+        return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, None, subject_data['label'])
 
 def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args
@@ -163,10 +166,9 @@ class qbx_goback_3L_105HCP(Dataset):
     def __init__(self,config):
         self.config = config
         self.data_path = config.data_path
+        self.raw_data_path = config.raw_data_path
         self.subset = config.subset
         self.save_path = os.path.join(self.data_path, 'processed_data')
-        if not os.path.exists(self.save_path):
-            os.makedirs(self.save_path)
         self.data_path = os.path.join(self.data_path, self.subset)
         self.use_custom_batch = config.use_custom_batch
         self.pts_per_sample = config.pts_per_sample
@@ -180,36 +182,53 @@ class qbx_goback_3L_105HCP(Dataset):
 
         if self.use_resampled_streamline:
             raise NotImplementedError('Resampled Streamlines not implemented yet')
-
         self.label_int_mapping = self.load_label_mapping()
-        print(datetime.datetime.now())
+        if not os.path.exists(self.data_path):
+            print_log(f'[DATASET] Data path {self.data_path} does not exist', logger='qbx_goback_3L_105HCP')
+            print_log(f'[DATASET] Creating QBX clusters', logger='qbx_goback_3L_105HCP')
+            create_qbx_cluster_from_scratch_n_save(
+                dataset='105HCP',
+                mapping=self.label_int_mapping,
+                save_path='/'.join(self.data_path.split('/')[:-1]),
+                raw_data_path=self.raw_data_path,
+                subset = [self.subset]
+            )
+        
+        os.makedirs(self.save_path, exist_ok=True)
         if self.subset == 'test' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
+            print_log(f'Loading {self.subset} data from {self.save_path}', logger='qbx_goback_3L_105HCP')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels= pickle.load(f)
                 for i in self.streamlines.keys():
                     self.streamlines[i] = blist(self.streamlines[i])
 
             if type(self.config.subject_ids) == list:
-                print(self.cluster[0][0].split('_')[0])
+                print_log(f'Using only the given subjects', logger='qbx_goback_3L_105HCP')
                 self.pc_cluster = [self.pc_cluster[i] for i in range(len(self.pc_cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.pc_cluster_labels = [self.pc_cluster_labels[i] for i in range(len(self.pc_cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.cluster_labels = [self.cluster_labels[i] for i in range(len(self.cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.streamlines = {i: self.streamlines[i] for i in self.streamlines.keys() if i in self.config.subject_ids}
                 self.streamline_labels = {i: self.streamline_labels[i] for i in self.streamline_labels.keys() if i in self.config.subject_ids}
                 self.cluster = [self.cluster[i] for i in range(len(self.cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
-                print(len(self.pc_cluster), len(self.pc_cluster_labels), len(self.cluster), len(self.cluster_labels))
-                print(self.streamlines.keys(), self.streamline_labels.keys())
+                # print(len(self.pc_cluster), len(self.pc_cluster_labels), len(self.cluster), len(self.cluster_labels))
+                # print(self.streamlines.keys(), self.streamline_labels.keys())
                 self.pc_cluster = np.array(self.pc_cluster)
                 self.pc_cluster_labels = np.array(self.pc_cluster_labels)
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
+            print_log(f'Loading {self.subset} data from {self.save_path}', logger='qbx_goback_3L_105HCP')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
-                print(np.unique(self.pc_cluster_labels))
+            del self.streamline_labels
+            del self.cluster_labels
+            del self.cluster
         else:
+            print_log(f'Processing {self.subset} data', logger='qbx_goback_3L_105HCP')
             self.load_and_process_data()
+        
+        print_log(f'Loaded {len(self.pc_cluster)} samples', logger='qbx_goback_3L_105HCP')
         if self.use_custom_batch:
+            print_log(f'[DATASET] Building custom batches', logger='qbx_goback_3L_105HCP')
             self.create_custom_batches()
-        print(datetime.datetime.now())
     
     def load_label_mapping(self):
         with open(self.label_mapping_path, 'r') as f:
@@ -219,7 +238,6 @@ class qbx_goback_3L_105HCP(Dataset):
 
     def create_custom_batches(self):
         unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
-        print(label_counts)
         batch_size = self.samples_per_class_per_batch*len(unique_labels)
         num_batches = max(int(min(label_counts)//self.samples_per_class_per_batch), self.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
@@ -240,14 +258,14 @@ class qbx_goback_3L_105HCP(Dataset):
     def load_and_process_data(self):
 
         subjects = [subject for subject in os.listdir(self.data_path) if os.path.isfile(os.path.join(self.data_path, subject))]
-        # if self.subset == 'test' and type(self.config.subject_ids) == list: # using only the given subjects
-        #     subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
+        if self.subset == 'test' and type(self.config.subject_ids) == list: # using only the given subjects
+            subjects = [subject for subject in subjects if subject.split('.')[0] in self.config.subject_ids]
         inp = []
         for subject in subjects:
             inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.min_threshold_per_cluster, self.subset == 'test'))
         with Pool() as p:
-            print('inside pool')
-            data = p.map(load_data, inp)
+            # data = p.map(load_data, inp)
+            data = list(tqdm(p.imap(load_data, inp), total=len(inp)))
         
         self.pc_cluster = []
         self.pc_cluster_labels = []
@@ -270,9 +288,9 @@ class qbx_goback_3L_105HCP(Dataset):
         if self.subset != 'test':
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
-        else:
-            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
+        # else:
+        #     with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
+        #         pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
         del data
         gc.collect()
 
@@ -321,7 +339,7 @@ class qbx_goback_3L_105HCP(Dataset):
             return len(self.custom_batches)
         
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/qbx_goback_3L_105HCP_23.yaml')
+# config = cfg_from_yaml_file('./TractoGPT/cfgs/dataset_configs/qbx_goback_3L_105HCP_23.yaml')
 # dataset = qbx_goback_3L_105HCP(config)
 #%%
 # cnt = 0
@@ -369,7 +387,7 @@ class qbx_goback_3L_105HCP(Dataset):
 # # #%%
 # # import pickle
 # # import numpy as np
-# # with open('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/val/sub-1254.pkl', 'rb') as f:
+# # with open('./data/dataTrInF/qbx/val/sub-1254.pkl', 'rb') as f:
 # #     data = pickle.load(f)
 # # z = np.array(data[0])[:,3]
 # # #%%

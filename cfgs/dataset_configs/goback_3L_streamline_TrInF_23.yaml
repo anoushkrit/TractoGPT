@@ -1,7 +1,8 @@
 NAME: goback_3L_streamline_TrInF
-data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF23/qbx
+raw_data_path: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/
+data_path: ./data/dataTrInF23/qbx
 
-save_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF23/qbx/processed_data
+save_path: ./data/dataTrInF23/qbx/processed_data
 
 # subset: test
 use_custom_batch: True

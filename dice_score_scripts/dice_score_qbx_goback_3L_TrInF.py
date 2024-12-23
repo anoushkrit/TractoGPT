@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.dice import *
 import pickle
 from nibabel.streamlines.array_sequence import ArraySequence
@@ -7,7 +7,7 @@ import numpy as np
 from dipy.io.streamline import load_tractogram
 import json
 from dipy.io.stateful_tractogram import StatefulTractogram, Space
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.dice import hcp_scores
 import ast
 from tqdm import tqdm
@@ -161,6 +161,7 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
             output = json.load(f)
     for i in range(len(inp)):
         output[unique_subjects[i]] = calculate_hcp_scores_subject(inp[i])
+        output[unique_subjects[i]][0] = eq/len(true_labels)*100
     with open(output_path, 'w') as f:
         json.dump(output, f, indent=4)
     

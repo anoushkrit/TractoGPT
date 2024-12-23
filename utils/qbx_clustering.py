@@ -9,17 +9,18 @@ from collections import Counter
 import os , pandas as pd
 from tqdm import tqdm
 import sys
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/utils')
-from streamline_ops import *
+sys.path.append('./TractoGPT/utils')
+from utils.streamline_ops import *
 from sklearn.utils.class_weight import compute_class_weight
 from dipy.tracking.distances import approx_polygon_track
-from tqdm import tqdm
 import multiprocessing
 import pickle
+from utils.logger import *
 
 
+qbx_hierarchy = [40,30,20,10,8,6,4]
+level = len(qbx_hierarchy)
 
-#%%
 is_interactive = True
 
 def find_duplicates(sub_arr):
@@ -49,26 +50,23 @@ def deduplication(arr, labels):
     total_duplicate_indices = [index for sublist in results for index in sublist]
     arr = [arr[i] for i in range(len(arr)) if i not in total_duplicate_indices]
     labels = [labels[i] for i in range(len(labels)) if i not in total_duplicate_indices]
-    print(len(arr), "after deduplication")
+    # print(len(arr), "after deduplication")
     return arr, labels
 
-def load_TractoInferno(tracts_directory):
+def load_TractoInferno(tracts_directory, label_int_mapping:dict):
     tracks = [] 
     labels = [] 
     import re        
     paths = sorted([p for p in Path(tracts_directory).iterdir() if p.is_file() and p.suffix == '.trk'])
     # for path in tqdm(paths):
 
-    import json
-    with open('label_int_mappings/label_int_mapping_105HCP_23.json', 'r') as f:
-        label_int_mapping = json.load(f)
     
     for path in paths:
         subject = re.search(r'\d{4}', str(path)).group()
         # print(subject)
         if path.is_file() and path.suffix == '.trk':
-            # label = re.search(r'__(.*?)\.trk', str(path)).group(1)
-            label = str(path).split('/')[-1].split('.')[0]
+            label = re.search(r'__(.*?)\.trk', str(path)).group(1)
+            # label = str(path).split('/')[-1].split('.')[0]
             if label not in label_int_mapping.keys():
                 continue
             tractogram = load_trk(str(path), "same", bbox_valid_check=False)
@@ -86,17 +84,19 @@ def load_TractoInferno(tracts_directory):
     tracks, labels = deduplication(tracks, labels)
     return tracks, labels
 
-def load_HCP(tracts_directory):
+def load_HCP(tracts_directory, label_int_mapping:dict):
     tracks = [] 
     labels = [] 
     import re
     dataset = "HCP"
     subject = re.search(r'\d{6}', tracts_directory).group()
-    print(f"Loading streamlines for {subject} for {dataset} dataset")
+    # print(f"Loading streamlines for {subject} for {dataset} dataset")
     paths = sorted([p for p in Path(tracts_directory).iterdir() if p.is_file() and p.suffix == '.trk'])
-    for path in tqdm(paths):
+    for path in paths:
         if path.is_file() and path.suffix == '.trk':
             label = str(path).split('/')[-1].split('.')[0]
+            if label not in label_int_mapping.keys():
+                continue
             tractogram = load_trk(str(path), "same", bbox_valid_check=False)
             num_streamlines = len(tractogram.streamlines)
         else:
@@ -117,8 +117,8 @@ def stratified_random_sample(tracks, labels, shuffle=True):
     label_counts = Counter(labels)
     n_samples = np.percentile(list(label_counts.values()), 20)
     random_indices = []
-    print("Performing Stratified Random Sampling")
-    for label in tqdm(np.unique(labels)):
+    # print("Performing Stratified Random Sampling")
+    for label in np.unique(labels):
         label_indices = np.where(np.array(labels) == label)[0]
         # print(label, len(label_indices))
         len_rand = len(random_indices)
@@ -158,9 +158,6 @@ def make_tracks_clusters_map(clusters, cidx):
     track_indices, cluster_indices = zip(*result)    
     return track_indices, cluster_indices
 
-qbx_hierarchy = [40,30,20,10,8,6,4]
-
-level = len(qbx_hierarchy)
 
 #%%
 def func(args):
@@ -184,41 +181,58 @@ def func(args):
     final_merged_df.columns = ['track_indices', '3last', '2last', 'last']
     final_list = final_merged_df.values.tolist()
 
-    with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx/{split}/{subject}.pkl", "wb") as f:
+    with open(f"./data/dataTrInF/qbx/{split}/{subject}.pkl", "wb") as f:
         pickle.dump((final_list, tracks, labels), f)
 
-for split in ["train", "val", "test"]:
-    if not os.path.exists(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}"):
-        os.makedirs(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}")
-    subjects = os.listdir(f'/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/{split}')
+def create_qbx_cluster_from_scratch_n_save(dataset: str, mapping: dict, save_path: str, raw_data_path: str, subset: list):
+    if dataset not in ['TractoInferno', '105HCP', 'hybrid']:
+        raise NotImplementedError(f"Dataset {dataset} not implemented, only TractoInferno, 105HCP and hybrid are supported")
 
-    for subject in subjects:
-        print(subject)
-        # pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/{split}/{subject}/tractography'
-        pth = f'/scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/{split}/{subject}/tracts'
-        # print(os.listdir(pth))
-        if not os.path.exists(pth):
-            print(f"Skipping {subject}")
-            continue
-        tracks, labels = load_TractoInferno(tracts_directory=pth)
-        clusters = qbx_cci_clustering(tracks, labels, qbx_hierarchy, downsample=True)
-        tidxs_4, cidxs_4 = make_tracks_clusters_map(clusters, level-2)
-        tidxs_5, cidxs_5 = make_tracks_clusters_map(clusters, level-1)
-        tidxs_6, cidxs_6 = make_tracks_clusters_map(clusters, level)
+    # if dataset == 'TractoInferno':
+    #     splits = ['trainset', 'validset', 'testset']
+    # elif dataset == '105HCP':
+    #     splits = ['train', 'val', 'test']
+    # elif dataset == 'hybrid':
+    #     pass
+    splits = subset
+    for split in splits:
+        os.makedirs(f"{save_path}/{split}", exist_ok=True)
+        subjects = os.listdir(f'{raw_data_path}/{split}')
 
-        df_4 = pd.DataFrame({'tidxs': tidxs_4, 'cidxs': cidxs_4})
-        df_5 = pd.DataFrame({'tidxs': tidxs_5, 'cidxs': cidxs_5})
-        df_6 = pd.DataFrame({'tidxs': tidxs_6, 'cidxs': cidxs_6})
+        print_log(f"[QBX CLUSTERING] Creating QBX Clusters for {dataset} dataset", logger="QBX")
+        for subject in tqdm(subjects):
+            if dataset == 'TractoInferno':
+                pth = f'{raw_data_path}/{split}/{subject}/tractography'
+            elif dataset == '105HCP':
+                pth = f'{raw_data_path}/{split}/{subject}/tracts'
 
-        merged_df = pd.merge(df_4, df_5, on='tidxs', suffixes=('_level_4', '_level_5'))
+            if not os.path.exists(pth):
+                print_log(f"[QBX CLUSTERING] Skipping {subject} as no tracts found", logger="QBX")
+                continue
+            if dataset == 'TractoInferno':
+                tracks, labels = load_TractoInferno(pth, mapping)
+            elif dataset == '105HCP':
+                tracks, labels = load_HCP(pth, mapping)
+            else:
+                raise NotImplementedError("hybrid not implimented yet")
+            
+            clusters = qbx_cci_clustering(tracks, labels, qbx_hierarchy, downsample=True)
+            tidxs_4, cidxs_4 = make_tracks_clusters_map(clusters, level-2)
+            tidxs_5, cidxs_5 = make_tracks_clusters_map(clusters, level-1)
+            tidxs_6, cidxs_6 = make_tracks_clusters_map(clusters, level)
 
-        # Merge the result with df_6
-        final_merged_df = pd.merge(merged_df, df_6, on='tidxs', suffixes=('', '_level_6'))
+            df_4 = pd.DataFrame({'tidxs': tidxs_4, 'cidxs': cidxs_4})
+            df_5 = pd.DataFrame({'tidxs': tidxs_5, 'cidxs': cidxs_5})
+            df_6 = pd.DataFrame({'tidxs': tidxs_6, 'cidxs': cidxs_6})
 
-        final_merged_df.columns = ['track_indices', '3last', '2last', 'last']
-        final_list = final_merged_df.values.tolist()
+            merged_df = pd.merge(df_4, df_5, on='tidxs', suffixes=('_level_4', '_level_5'))
 
-        print('saving file at', f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}/{subject}.pkl")
-        with open(f"/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/{split}/{subject}.pkl", "wb") as f:
-            pickle.dump((final_list, tracks, labels), f)
+            # Merge the result with df_6
+            final_merged_df = pd.merge(merged_df, df_6, on='tidxs', suffixes=('', '_level_6'))
+
+            final_merged_df.columns = ['track_indices', '3last', '2last', 'last']
+            final_list = final_merged_df.values.tolist()
+
+            with open(f"{save_path}/{split}/{subject}.pkl", "wb") as f:
+                pickle.dump((final_list, tracks, labels), f)
 

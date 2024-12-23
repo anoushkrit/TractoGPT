@@ -1,13 +1,14 @@
 import sys
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.dice import *
 import pickle
+import argparse
 from nibabel.streamlines.array_sequence import ArraySequence
 import numpy as np
 from dipy.io.streamline import load_tractogram
 import json
 from dipy.io.stateful_tractogram import StatefulTractogram, Space
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.dice import hcp_scores
 import ast
 from tqdm import tqdm
@@ -18,9 +19,9 @@ from sklearn.metrics import classification_report
 
 def load_pickle_data(path):
     with open(path, 'rb') as f:
-        true_labels, predicted_labels, streamlines, subjects = pickle.load(f)
+        pkl_data = pickle.load(f)
 
-    return true_labels, predicted_labels, streamlines, subjects
+    return pkl_data
 
 def string_to_list(streamline):
     list_str = ','.join(streamline.split())
@@ -118,7 +119,18 @@ def calculate_hcp_scores(pickle_path, mapping_path, output_path):
     return output
 
 if __name__ == "__main__":
-    pickle_path = 'predictions_new/pkls/test_pred_single_GPTM_105HCP__TrInF.pkl'
-    mapping_path = 'label_int_mappings/label_int_mapping_TrInF_23.json'
-    output_path = 'predictions_new/single_GPTM_105HCP__TrInF/dice_scores_single_streamline_105HCP__TrInF.json'
+    parser = argparse.ArgumentParser(description="Run a model with specified parameters.")
+    
+    # Add arguments
+    parser.add_argument("--model", required=True, help="Name of the model to use.")
+    parser.add_argument("--exp_name", required=True, help="Experiment name.")
+    parser.add_argument("--dataset_name", required=True, help="Name of the dataset.")
+    parser.add_argument("--mapping_path", required=True, help="Path to the label int mapping file.")
+    
+    # Parse arguments
+    args = parser.parse_args()
+
+    pickle_path = f'predictions_new/{args.exp_name}/pkls/test_pred__{args.dataset_name}__{args.model}.pkl'
+    mapping_path = args.mapping_path
+    output_path = f'predictions_new/{args.exp_name}/single_GPTM_105HCP__TrInF/dice_scores_single_streamline_105HCP__TrInF.json'
     calculate_hcp_scores(pickle_path, mapping_path, output_path)

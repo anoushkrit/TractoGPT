@@ -6,18 +6,18 @@ dataset:
   {
     train:
       {
-        _base_: cfgs/dataset_configs/goback_3L_streamline_TrInF.yaml,
-        others: { subset: "trainset", npoints: 1024 },
+        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        others: { subset: "train", npoints: 1024 },
       },
     val:
       {
-        _base_: cfgs/dataset_configs/goback_3L_streamline_TrInF.yaml,
-        others: { subset: "validset", npoints: 1024 },
+        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        others: { subset: "val", npoints: 1024 },
       },
     test:
       {
-        _base_: cfgs/dataset_configs/goback_3L_streamline_TrInF.yaml,
-        others: { subset: "testset", npoints: 1024 },
+        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        others: { subset: "test", npoints: 1024 },
       },
   }
 

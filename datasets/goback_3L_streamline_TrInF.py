@@ -1,7 +1,7 @@
 # %%
 import sys
 import os,json
-import datetime
+import datetime, time
 import numpy as np
 from pathlib import Path
 import torch
@@ -11,15 +11,17 @@ from torch.utils.data import Dataset
 from scipy.interpolate import CubicSpline
 from multiprocessing import Pool, cpu_count, set_start_method
 from dipy.tracking.distances import approx_polygon_track as apt
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.config import *
+from utils.logger import *
+from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
 import gc, pickle
 import copy
 from memory_profiler import profile
 from collections import defaultdict
-
+import tracemalloc
 from .build import DATASETS
-
+# tracemalloc.start()
 #%%
 def downsample(args):
     streamline, pts = args
@@ -63,50 +65,45 @@ def choose_upORdownsample(args):
         return downsample((streamline, pts))
     
 def create_clusters_subject(args):
-    data, subject_id, streamline_threshold_per_cluster, test = args
+    data, subject_id, min_threshold_per_cluster, test = args
 
-    cluster_id_to_idx_mapping = {
-        'L1': defaultdict(list),
-        'L2': defaultdict(list),
-        'L3': defaultdict(list),
-    }
-
-    for idx, cid in enumerate(data['cluster_ids_l1']):
-        cluster_id_to_idx_mapping['L1'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l2']):
-        cluster_id_to_idx_mapping['L2'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l3']):
-        cluster_id_to_idx_mapping['L3'][cid].append(idx)
-    
-    included_streamlines = np.zeros(len(data['label'])) # none included here
+    cluster_id_to_idx_mapping = {}
+    cluster_id_to_idx_mapping['L1'] = {}
+    for i in range(len(data['cluster_ids_l1'])):
+        cluster_id_to_idx_mapping['L1'][data['cluster_ids_l1'][i]] = i
+    cluster_id_to_idx_mapping['L2'] = {}
+    for i in range(len(data['cluster_ids_l2'])):
+        cluster_id_to_idx_mapping['L2'][data['cluster_ids_l2'][i]] = i
+    cluster_id_to_idx_mapping['L3'] = {}
+    for i in range(len(data['cluster_ids_l3'])):
+        cluster_id_to_idx_mapping['L3'][data['cluster_ids_l3'][i]] = i
     
     clusters = []
     pc_cluster_labels = []
+    included_streamlines = np.zeros(len(data['label'])) # none included here
     cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
 
     cluster_ids_l2 = []
-    for cluster_id in cluster_ids_l3[cluster_count_l3 <  streamline_threshold_per_cluster]:
-        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id][0]])
+    for cluster_id in cluster_ids_l3[cluster_count_l3 <  min_threshold_per_cluster]:
+        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id]])
     cluster_ids_l2 = np.unique(cluster_ids_l2)
     cluster_count_l2 = np.zeros(len(cluster_ids_l2))
     for i,cluster_id in enumerate(cluster_ids_l2):
-        cluster_count_l2[i] = len(cluster_id_to_idx_mapping['L2'][cluster_id])
+        cluster_count_l2[i] = len(np.where(data['cluster_ids_l2'] == cluster_id)[0])
     
     cluster_ids_l1 = []
-    for cluster_id in cluster_ids_l2[cluster_count_l2 <  streamline_threshold_per_cluster]:
-        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id][0]])
+    for cluster_id in cluster_ids_l2[cluster_count_l2 <  min_threshold_per_cluster]:
+        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id]])
     cluster_ids_l1 = np.unique(cluster_ids_l1)
     cluster_count_l1 = np.zeros(len(cluster_ids_l1))
     for i,cluster_id in enumerate(cluster_ids_l1):
-        cluster_count_l1[i] = len(cluster_id_to_idx_mapping['L1'][cluster_id])
+        cluster_count_l1[i] = len(np.where(data['cluster_ids_l1'] == cluster_id)[0])
     
     for cluster_id in cluster_ids_l1:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L1'][cluster_id]
+        cluster_streamline_idx = np.where(data['cluster_ids_l1'] == cluster_id)[0]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
+        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
@@ -116,10 +113,10 @@ def create_clusters_subject(args):
         pc_cluster_labels.append(label)
 
     for cluster_id in cluster_ids_l2:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L2'][cluster_id]
+        cluster_streamline_idx = np.where(data['cluster_ids_l2'] == cluster_id)[0]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
+        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
@@ -129,10 +126,10 @@ def create_clusters_subject(args):
         pc_cluster_labels.append(label)
 
     for cluster_id in cluster_ids_l3:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L3'][cluster_id]
+        cluster_streamline_idx = np.where(data['cluster_ids_l3'] == cluster_id)[0]
         if included_streamlines[cluster_streamline_idx[0]] == 1:
             continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
+        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
             continue
         included_streamlines[cluster_streamline_idx] = 1
         u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
@@ -142,8 +139,11 @@ def create_clusters_subject(args):
         pc_cluster_labels.append(label)
 
     return (clusters, pc_cluster_labels)
+
 def load_data(args):
-    pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test = args
+    # current, peak = tracemalloc.get_traced_memory()
+    # print(f'current memory usage at start of load_data is {current / 10**6}MB; Peak was {peak / 10**6}MB')
+    pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test, subject, pts_per_streamline, save_path, subset = args
     level = 3
     subject_data = {}
     subject_id = os.path.basename(pth).split('.')[0]
@@ -151,13 +151,20 @@ def load_data(args):
     with open(pth, 'rb') as f:
         data = pickle.load(f)
     data_x = np.array(data[0])
-    subject_data['streamlines'] = data[1]
+    subject_data['streamlines'] = blist(data[1])
     subject_data['label'] = np.array(data[2])
     subject_data['cluster_ids_l1'] = data_x[:,level-2]
     subject_data['cluster_ids_l2'] = data_x[:,level-1]
     subject_data['cluster_ids_l3'] = data_x[:,level]
+    del data_x
+    del data
+    # print(2)
 
     cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
+    subject_data['cluster_ids_l1'] = None
+    subject_data['cluster_ids_l2'] = None
+    subject_data['cluster_ids_l3'] = None
+    # print(3)
 
     pc_cluster = np.zeros((len(cluster), pts_per_sample, 3))
     for i in range(len(cluster)):
@@ -168,11 +175,36 @@ def load_data(args):
         streamline_idx = np.array([int(cluster[i][j].split('_')[1]) for j in range(len(cluster[i]))])
         cluster_labels.append(subject_data['label'][streamline_idx])
 
-    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
+    # resampling streamline
+    output_dir = os.path.join(save_path, f'resampled_streamlines_{pts_per_streamline}', subset)
+    os.makedirs(output_dir, exist_ok=True)
+    inp = [(subject_data['streamlines'][i], pts_per_streamline) for j in range(len(subject_data['streamlines']))]
+    with Pool(20) as p:
+        resampled_streamlines = p.map(choose_upORdownsample, inp)
+    
+    resampled_streamlines = np.array(resampled_streamlines)
+    # Directly write to memmap
+    filename = os.path.join(output_dir, f'{subject.split(".")[0]}__{len(resampled_streamlines)}.dat')
+    memmap = np.memmap(filename, dtype='float32', mode='w+', shape=(resampled_streamlines.shape))
+    memmap[:] = np.array(resampled_streamlines)  # Reshape if necessary
+    memmap.flush()
+    del resampled_streamlines   
+
+    subject_labels = subject_data['label']
+    streamlines = subject_data['streamlines']
+    del subject_data
+    gc.collect()
+    # current, peak = tracemalloc.get_traced_memory()
+    # print(f'current memory usage at end of load_data is {current / 10**6}MB; Peak was {peak / 10**6}MB')
+    # return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, None, blist(subject_data['label']))
+    if test:
+        return (pc_cluster, pc_cluster_labels, cluster, None, streamlines, subject_labels)
+    return (pc_cluster, pc_cluster_labels, cluster, None, None, subject_labels)
     # return (pc_cluster, pc_cluster_labels, cluster, cluster_labels)
 
 def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args
+    subject_id = indices[0].split('_')[0]      
     indices = [int(i.split('_')[1]) for i in indices]
     club_streamlines = np.array(data['streamlines'][indices[0]])  
     for idx in indices[1:]:
@@ -182,6 +214,7 @@ def concat_streamlines(args):
         else:
             club_streamlines = np.concatenate((club_streamlines, data['streamlines'][idx]))     
     
+    # club_streamlines = pc_norm(club_streamlines)
     original_club_streamlines = copy.deepcopy(club_streamlines)
     while len(club_streamlines)+len(original_club_streamlines) < pts_per_sample:
         club_streamlines = np.concatenate((club_streamlines,original_club_streamlines))
@@ -197,11 +230,10 @@ class goback_3L_streamline_TrInF(Dataset):
 
     def __init__(self,config):
         self.config = config
+        self.raw_data_path = config.raw_data_path
         self.data_path = config.data_path
         self.subset = config.subset
         self.save_path = os.path.join(self.data_path, 'processed_data')
-        if not os.path.exists(self.save_path):
-            os.makedirs(self.save_path)
         self.data_path = os.path.join(self.data_path, self.subset)
         self.use_custom_batch = config.use_custom_batch
         self.pts_per_sample = config.pts_per_sample
@@ -220,16 +252,29 @@ class goback_3L_streamline_TrInF(Dataset):
 
         if self.use_resampled_streamline:
             raise NotImplementedError('Resampled Streamlines not implemented yet')
-
         self.label_int_mapping = self.load_label_mapping()
-        print(datetime.datetime.now())
+        if not os.path.exists(self.data_path):
+            print_log(f'[DATASET] Data path {self.data_path} does not exist', logger='qbx_goback_3L')
+            print_log(f'[DATASET] Creating QBX clusters', logger='qbx_goback_3L')
+            create_qbx_cluster_from_scratch_n_save(
+                dataset='TractoInferno',
+                mapping=self.label_int_mapping,
+                save_path='/'.join(self.data_path.split('/')[:-1]),
+                raw_data_path=self.raw_data_path,
+                subset=[self.subset]
+            )
+
+        os.makedirs(self.save_path, exist_ok=True)
+
         if self.subset == 'testset' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
+            print_log(f'Loading {self.subset} from {self.save_path}', logger='goback_3L_streamline_TrInF')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels= pickle.load(f)
                 for i in self.streamlines.keys():
                     self.streamlines[i] = blist(self.streamlines[i])
             
             if type(self.config.subject_ids) == list:
+                print_log(f'Using only the given subjects', logger='goback_3L_streamline_TrInF')
                 self.pc_cluster = [self.pc_cluster[i] for i in range(len(self.pc_cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.pc_cluster_labels = [self.pc_cluster_labels[i] for i in range(len(self.pc_cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.cluster_labels = [self.cluster_labels[i] for i in range(len(self.cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
@@ -240,7 +285,6 @@ class goback_3L_streamline_TrInF(Dataset):
                 self.pc_cluster_labels = np.array(self.pc_cluster_labels)
             
             self.load_resampled_memmaps()
-
             streamline_count = 0
             for i in self.streamlines.keys():
                 streamline_count += len(self.streamlines[i])
@@ -257,22 +301,30 @@ class goback_3L_streamline_TrInF(Dataset):
 
 
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
-            print(os.path.join(self.save_path, f'{self.subset}.pkl'))
+            print_log(f'Loading {self.subset} from {self.save_path}', logger='goback_3L_streamline_TrInF')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
+                data = pickle.load(f)
+                if len(data) != 5:
+                    del data
+                    print_log(f'Loaded Data is not correct. Processing again', logger='goback_3L_streamline_TrInF')
+                    self.load_and_process_data()
+                else:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = data
             
             self.load_resampled_memmaps()
-            print(self.resampled_streamlines.keys())
-            print(len(self.pc_cluster), len(self.pc_cluster_labels), len(self.cluster), len(self.cluster_labels))
         else:
             self.load_and_process_data()
-        print(datetime.datetime.now())
+
+        print_log(f'Loaded {len(self.pc_cluster)} samples', logger='goback_3L_streamline_TrInF')
         if self.use_custom_batch:
+            print_log(f'[DATASET] Building custom batches', logger='goback_3L_streamline_TrInF')
             self.create_custom_batches()
-        print(datetime.datetime.now())
     
     def load_resampled_memmaps(self):
         base_path = os.path.join(self.save_path, f'resampled_streamlines_{self.config.pts_per_streamline}', self.subset)
+        if not os.path.exists(base_path):
+            self.make_save_resampled_streamlines()
+        print_log(f'Loading resampled streamlines from {base_path}', logger='goback_3L_streamline_TrInF')
         subjects = os.listdir(base_path)
         
         self.resampled_streamlines = {}
@@ -291,8 +343,6 @@ class goback_3L_streamline_TrInF(Dataset):
 
     def create_custom_batches(self):
         unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
-        print(label_counts)
-        print('min label count: ',min(label_counts))
         batch_size = self.pc_samples_per_class_per_batch*len(unique_labels)*self.fusion_streamline_per_cluster
         num_batches = max(int(min(label_counts)//self.pc_samples_per_class_per_batch), self.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size, 2), dtype=int)
@@ -330,7 +380,8 @@ class goback_3L_streamline_TrInF(Dataset):
         os.makedirs(output_dir, exist_ok=True)
 
         # Create the pool outside of the loop
-        with Pool() as p:
+        print_log(f'[DATASET] Resampling streamlines', logger='goback_3L_streamline_TrInF')
+        with Pool(5) as p:
             for i, subject in enumerate(subjects):
                 inp = [(data[i][4][j], self.config.pts_per_streamline) for j in range(len(data[i][4]))]
                 resampled_streamlines = p.map(choose_upORdownsample, inp)
@@ -343,21 +394,30 @@ class goback_3L_streamline_TrInF(Dataset):
                 memmap.flush()
 
                 self.resampled_streamlines[subject.split('.')[0]] = memmap
-
+        print_log(f'[DATASET] Resampled streamlines saved to {output_dir}', logger='goback_3L_streamline_TrInF')
         gc.collect()
 
     def load_and_process_data(self):
 
         subjects = [subject for subject in os.listdir(self.data_path) if os.path.isfile(os.path.join(self.data_path, subject))]
         if self.subset == 'testset' and type(self.config.subject_ids) == list: # using only the given subjects
-            subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
+            subjects = [subject for subject in subjects if subject.split('.')[0] in self.config.subject_ids]
             
         inp = []
         for subject in subjects:
-            inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.streamline_threshold_per_cluster, self.subset == 'testset'))
-        with Pool() as p:
-            print('inside pool')
-            data = p.map(load_data, inp)
+            inp.append((os.path.join(self.data_path,subject), 
+                        self.use_resampled_streamline,
+                        self.pts_per_sample,
+                        self.streamline_threshold_per_cluster,
+                        self.subset == 'testset',
+                        subject,
+                        self.config.pts_per_streamline,
+                        self.save_path,
+                        self.subset
+                        ))
+        # with Pool(5) as p:
+        #     # data = p.map(load_data, inp)
+        #     data = list(tqdm(p.imap(load_data, inp), total=len(inp)))
         
         self.pc_cluster = []
         self.pc_cluster_labels = []
@@ -365,28 +425,55 @@ class goback_3L_streamline_TrInF(Dataset):
         self.cluster_labels = []
         self.streamlines = {}
         self.streamline_labels = {}
-        for i in range(len(data)):
-            self.pc_cluster.extend(data[i][0])
-            self.pc_cluster_labels.extend(data[i][1])
-            self.cluster.extend(data[i][2])
-            self.cluster_labels.extend(data[i][3])
-            self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
+        for i in tqdm(range(len(inp))):
+            data = load_data(inp[i])
+            self.pc_cluster.extend(data[0])
+            self.pc_cluster_labels.extend(data[1])
+            self.cluster.extend(data[2])
+            if data[3] is not None:
+                self.cluster_labels.extend(data[3])
+            self.streamline_labels[subjects[i].split('.')[0]] = data[5]
             if self.subset == 'testset':
-                self.streamlines[subjects[i].split('.')[0]] = data[i][4]
+                self.streamlines[subjects[i].split('.')[0]] = data[4]
+            # current, peak = tracemalloc.get_traced_memory()
+            # print(f'Current memory usage is {current / 10**6}MB; Peak was {peak / 10**6}MB')
+
+        # for i in range(len(data)):
+        #     self.pc_cluster.extend(data[i][0])
+        #     self.pc_cluster_labels.extend(data[i][1])
+        #     self.cluster.extend(data[i][2])
+        #     self.cluster_labels.extend(data[i][3])
+        #     self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
+        #     if self.subset == 'testset':
+        #         self.streamlines[subjects[i].split('.')[0]] = data[i][4]
         
 
         self.pc_cluster = np.array(self.pc_cluster)
         self.pc_cluster_labels = np.array(self.pc_cluster_labels)
                 
+        self.load_resampled_memmaps()
         if self.subset != 'testset':
-            self.make_save_resampled_streamlines((data, subjects))
+            # self.make_save_resampled_streamlines((data, subjects))
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
         else:
-            self.make_save_resampled_streamlines((data, subjects))
-            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
-        del data
+            streamline_count = 0
+            for i in self.streamlines.keys():
+                streamline_count += len(self.streamlines[i])
+
+            self.streamline_to_cluster = np.zeros((streamline_count,2), dtype=np.int64)
+            start=0
+            for i, cluster in enumerate(self.cluster):
+                for j in range(len(cluster)):
+                    self.streamline_to_cluster[start+j] = [i,j]
+                start += len(cluster)
+            
+            if(start!=streamline_count):
+                print(start, streamline_count)
+        #     # self.make_save_resampled_streamlines((data, subjects))
+        #     self.load_resampled_memmaps()
+        #     with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
+        #         pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
         gc.collect()
 
     def map_batch_labels(self, labels):
@@ -481,7 +568,7 @@ class goback_3L_streamline_TrInF(Dataset):
             return len(self.custom_batches)
         
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/goback_3L_streamline_TrInF_23.yaml')
+# config = cfg_from_yaml_file('./TractoGPT/cfgs/dataset_configs/goback_3L_streamline_TrInF_23.yaml')
 # dataset = goback_3L_streamline_TrInF(config)
 # import time
 # print('sleeping')
@@ -540,7 +627,7 @@ class goback_3L_streamline_TrInF(Dataset):
 # plot_point_cloud(pc[8], title = int(label[11]))
 # #%%
 # import json 
-# with open('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/label_int_mappings/label_int_mapping_TrInF.json', 'r') as f:
+# with open('./TractoGPT/label_int_mappings/label_int_mapping_TrInF.json', 'r') as f:
 #     label_mapping = json.load(f)
 # int_label_mapping = {v: k for k, v in label_mapping.items()}
 # print(int_label_mapping)

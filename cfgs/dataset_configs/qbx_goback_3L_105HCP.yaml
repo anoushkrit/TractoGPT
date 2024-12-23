@@ -1,11 +1,12 @@
 NAME: qbx_goback_3L_105HCP
-data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_105HCP/qbx
+raw_data_path: /scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/
+data_path: ./data/data_105HCP/qbx
 
 # subset: train
-use_custom_batch: False
+use_custom_batch: True
 pts_per_sample: 1024
-minimum_batches: 1500
-samples_per_class_per_batch: 6
+minimum_batches: 10
+samples_per_class_per_batch: 2
 use_resampled_streamline: False
+min_threshold_per_cluster: 10
 label_mapping_path: label_int_mappings/label_int_mapping_105HCP.json
-min_threshold_per_cluster: 0

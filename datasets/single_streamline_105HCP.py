@@ -14,8 +14,9 @@ from scipy.interpolate import CubicSpline
 from multiprocessing import Pool, cpu_count, set_start_method
 from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
 from dipy.tracking.distances import approx_polygon_track as apt
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.config import *
+from utils.logger import *
 import gc, pickle
 from dipy.tracking.streamline import select_random_set_of_streamlines
 import copy
@@ -84,7 +85,7 @@ class single_streamline(Dataset):
         if self.subset == 'test' or self.subset == 'val':
             self.use_custom_batch = False
 
-        print('Processing data for :',self.subset)
+        print_log(f'[DATASETS] Processing data for : {self.subset}', logger='single_streamline')
         self.batch_root_path = f'data/single_streamline/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/batches{self.points_per_streamline}'
         if not os.path.exists(self.batch_root_path):
             os.makedirs(self.batch_root_path)
@@ -108,12 +109,11 @@ class single_streamline(Dataset):
             self.labels = self.loadORprocess(path, self.load_streamlines_mp, title='labels')
         path = f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl'
         self.resampled_streamlines = self.loadORprocess(path, self.fix_pts_in_streamlines, title='resampledStreamlines')
-        print('batching start : ', datetime.datetime.now())
+
         if self.use_custom_batch:
             self.create_custom_batch()
         self.itr_count = 0
 
-        print('end : ', datetime.datetime.now())
 
     def hash_streamline(self, streamline):
         return sha256(streamline.tobytes()).hexdigest()
@@ -124,10 +124,10 @@ class single_streamline(Dataset):
             dirname = os.path.dirname(path)
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
-            print('Processing data of :',title)
+            print_log(f'[DATASETS] Processing data of : {title}', logger='single_streamline')
             data = process_func()
         else:
-            print('Loading processed data for :',title, path)
+            print_log(f'[DATASETS] Loading processed data for : {title}', logger='single_streamline')
             with open(path, 'rb') as f:
                 data = pickle.load(f)
         return data
@@ -135,7 +135,6 @@ class single_streamline(Dataset):
     def create_custom_batch(self):
         # stratified sampler
         unique_labels, label_counts = np.unique(self.labels, return_counts=True)
-        print('min_label: ',min(label_counts))
         batch_size = self.num_samples_per_class_per_batch*len(unique_labels)
         num_batches = max(int(min(label_counts)//self.num_samples_per_class_per_batch), self.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
@@ -193,7 +192,6 @@ class single_streamline(Dataset):
         subjects = [subject for subject in Path(data_path).iterdir() if os.path.isdir(subject) and subject.name != 'meta']
         if self.subset=='test' and type(self.config.subject_ids) == list: # using only the given subjects
             subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
-        print(subjects)
         subject_data = [
             (subject, data_path, self.sample_per_subject, self.samples_per_class, self.label_int_mapping)
             for subject in subjects
@@ -273,7 +271,7 @@ class single_streamline(Dataset):
         return len(self.streamlines)
     
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/single_streamline.yaml')
+# config = cfg_from_yaml_file('./TractoGPT/cfgs/dataset_configs/single_streamline.yaml')
 # x = single_streamline(config)
 # #%%
 # a,b,c = x[0]
@@ -315,4 +313,4 @@ class single_streamline(Dataset):
 # # %%
 # idx =  634
 # plot(a[idx],c[idx])
-# print('point in above plotted streamline :',len(a[idx]))
+# print_log(f'[DATASETS] point in above plotted streamline :',len(a[idx]))

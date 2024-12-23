@@ -1,7 +1,7 @@
 NAME: goback_3L_streamline_hybrid
-data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx
+data_path: ./data/data_hybrid/qbx
 
-save_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data_hybrid/qbx/processed_data
+save_path: ./data/data_hybrid/qbx/processed_data
 # subset: test
 use_custom_batch: True
 pts_per_sample: 1024

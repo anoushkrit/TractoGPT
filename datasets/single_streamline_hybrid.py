@@ -14,8 +14,9 @@ from scipy.interpolate import CubicSpline
 from multiprocessing import Pool
 from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
 from dipy.tracking.distances import approx_polygon_track as apt
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT')
+sys.path.append('./TractoGPT')
 from utils.config import *
+from utils.logger import *
 import gc, pickle
 from dipy.tracking.streamline import select_random_set_of_streamlines
 import copy
@@ -134,10 +135,10 @@ class single_streamline_hybrid(Dataset):
             dirname = os.path.dirname(path)
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
-            print('Processing data/dataTrInF of :',title)
+            print_log(F'[DATASETS] Processing data/dataTrInF of : {title}', logger='single_streamline_hybrid')
             data = process_func()
         else:
-            print('Loading processed data/dataTrInF for :',title, path)
+            print_log(F'[DATASETS] Loading processed data/dataTrInF for : {title}', logger='single_streamline_hybrid')
             with open(path, 'rb') as f:
                 data = pickle.load(f)
         return data
@@ -145,9 +146,7 @@ class single_streamline_hybrid(Dataset):
     def create_custom_batch(self):
         # stratified sampler
         unique_labels, label_counts = np.unique(self.labels, return_counts=True)
-        print(len(unique_labels))
-        print(label_counts)
-        print(f'minimum label count in complete data loaded for {self.subset}:',min(label_counts))
+        print_log(f'[DATASETS] minimum label count in complete data loaded for {self.subset}: {min(label_counts)}', logger='single_streamline_hybrid')
         batch_size = self.num_samples_per_class_per_batch*len(unique_labels)
         num_batches = max(int(min(label_counts)//self.num_samples_per_class_per_batch), self.config.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
@@ -254,12 +253,11 @@ class single_streamline_hybrid(Dataset):
             subject_ids.extend([subject_id] * len(subject_streamlines))
             labels.extend(subject_labels)
 
-        print(f'Total number of streamlines in {self.subset} set: {len(streamlines)}')
+        print_log(f'[DATASETS] Total number of streamlines in {self.subset} set: {len(streamlines)}', logger='single_streamline_hybrid')
         self.streamlines = blist(streamlines)
         self.subject_ids = np.array(subject_ids)
         self.labels = np.array(labels)
         
-        print(np.unique(subject_ids))
         if self.subset != 'test':
             os.makedirs(f'{self.save_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}', exist_ok=True)
             with open(f'{self.save_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/streamlines.pkl', 'wb') as f:
@@ -319,18 +317,12 @@ class single_streamline_hybrid(Dataset):
         
         else:
             batch_size = self.custom_batches.shape[1]
-            # streamlines = [self.streamlines[i] for i in self.custom_batches[index]]
-            # streamlines = self.fix_pts_in_streamlines((streamlines, self.points_per_streamline))
             streamlines = self.resampled_streamlines[self.custom_batches[index]]
-            # print(streamlines.shape)
             streamlines = np.array(list(map(self.pc_norm, streamlines)), dtype=np.float32)
             batch_labels = self.labels[self.custom_batches[index]]
             batch_labels = self.map_batch_labels(batch_labels)
 
             shuffle = np.random.permutation(batch_size)
-            # print(streamlines.shape)
-            # print(batch_labels.shape)
-            # print(shuffle.shape)
             return torch.from_numpy(batch_labels[shuffle]), [0], torch.from_numpy(streamlines[shuffle])
     
     def __len__(self):
@@ -340,7 +332,7 @@ class single_streamline_hybrid(Dataset):
             return len(self.custom_batches)
     
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/single_streamline_TrInF.yaml')
+# config = cfg_from_yaml_file('./TractoGPT/cfgs/dataset_configs/single_streamline_TrInF.yaml')
 # x = single_streamline_TrInF(config)
 # #%%
 # len(x.labels)
@@ -383,4 +375,4 @@ class single_streamline_hybrid(Dataset):
 # # %%
 # idx =  634
 # plot(a[idx],c[idx])
-# print('point in above plotted streamline :',len(a[idx]))
+# print_log('[DATASETS] point in above plotted streamline :',len(a[idx]))

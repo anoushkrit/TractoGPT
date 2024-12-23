@@ -14,8 +14,9 @@ from scipy.interpolate import CubicSpline
 from multiprocessing import Pool
 from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
 from dipy.tracking.distances import approx_polygon_track as apt
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT')
+sys.path.append('./TractoGPT')
 from utils.config import *
+from utils.logger import *
 import gc, pickle
 from dipy.tracking.streamline import select_random_set_of_streamlines
 import copy
@@ -85,7 +86,7 @@ class single_streamline_TrInF(Dataset):
         if self.subset == 'testset' or self.subset == 'validset':
             self.use_custom_batch = False
 
-        print('Processing data/dataTrInF for :',self.subset)
+        print_log(f'[DATASETS] Processing data/dataTrInF for : {self.subset}', logger='single_streamline_TrInF')
         self.batch_root_path = f'data/dataTrInF/single_streamline/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/batches{self.points_per_streamline}'
         if not os.path.exists(self.batch_root_path):
             os.makedirs(self.batch_root_path)
@@ -108,7 +109,7 @@ class single_streamline_TrInF(Dataset):
         if self.use_custom_batch:
             self.create_custom_batch()
         
-        print('end : ', datetime.datetime.now())
+        print_log(f'[DATASETS] end : {datetime.datetime.now()}', logger='single_streamline_TrInF')
 
         self.itr_count = 0
     def load_label_mapping(self):
@@ -123,10 +124,10 @@ class single_streamline_TrInF(Dataset):
             dirname = os.path.dirname(path)
             if not os.path.exists(dirname):
                 os.makedirs(dirname)
-            print('Processing data/dataTrInF of :',title)
+            print_log(f'[DATASETS] Processing data/dataTrInF of : {title}', logger='single_streamline_TrInF')
             data = process_func()
         else:
-            print('Loading processed data/dataTrInF for :',title, path)
+            print_log(f'[DATASETS] Loading processed data/dataTrInF for : {title}', logger='single_streamline_TrInF')
             with open(path, 'rb') as f:
                 data = pickle.load(f)
         return data
@@ -135,7 +136,7 @@ class single_streamline_TrInF(Dataset):
         # stratified sampler
         unique_labels, label_counts = np.unique(self.labels, return_counts=True)
 
-        print(f'minimum label count in complete data loaded for {self.subset}:',min(label_counts))
+        print_log(f'[DATASETS] minimum label count in complete data loaded for {self.subset}: {min(label_counts)}', logger='single_streamline_TrInF')
         batch_size = self.num_samples_per_class_per_batch*len(unique_labels)
         num_batches = max(int(min(label_counts)//self.num_samples_per_class_per_batch), self.config.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
@@ -197,10 +198,8 @@ class single_streamline_TrInF(Dataset):
 
         subjects = [subject for subject in Path(data_path).iterdir() if os.path.isdir(subject)]
         if self.subset=='testset' and type(self.config.subject_ids) == list: # using only the given subjects
-            print(self.config.subject_ids)
             subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
         
-        print(subjects)
         
         subject_data = [(subject, data_path, self.sample_per_subject, self.samples_per_class)for subject in subjects]
 
@@ -213,7 +212,6 @@ class single_streamline_TrInF(Dataset):
             subject_ids.extend([subject_id] * len(subject_streamlines))
             labels.extend(subject_labels)
 
-        print(len(labels))
         self.streamlines = streamlines
         self.subject_ids = np.array(subject_ids)
         self.labels = np.array(labels)
@@ -273,7 +271,7 @@ class single_streamline_TrInF(Dataset):
         return len(self.custom_batches)
     
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/single_streamline_TrInF.yaml')
+# config = cfg_from_yaml_file('./TractoGPT/cfgs/dataset_configs/single_streamline_TrInF.yaml')
 # x = single_streamline_TrInF(config)
 # #%%
 # len(x.labels)
@@ -316,4 +314,4 @@ class single_streamline_TrInF(Dataset):
 # # %%
 # idx =  634
 # plot(a[idx],c[idx])
-# print('point in above plotted streamline :',len(a[idx]))
+# print_log('[DATASETS] point in above plotted streamline :',len(a[idx]))

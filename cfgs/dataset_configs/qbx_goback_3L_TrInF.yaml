@@ -1,12 +1,13 @@
 NAME: qbx_goback_3L
-data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF/qbx
+raw_data_path: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/
+data_path: ./data/dataTrInF/qbx
 
 # subset: testset
-use_custom_batch: False
+use_custom_batch: True
 pts_per_sample: 1024
-minimum_batches: 1500
-samples_per_class_per_batch: 10
+minimum_batches: 10
+samples_per_class_per_batch: 4
 use_resampled_streamline: False
 label_mapping_path: label_int_mappings/label_int_mapping_TrInF.json
 min_threshold_per_cluster: 10
-subject_ids: ['sub-1006']
+subject_ids: ['sub-1024', 'sub-1178', 'sub-1019', '930449']

@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.dice import *
 import pickle
 from nibabel.streamlines.array_sequence import ArraySequence
@@ -7,7 +7,7 @@ import numpy as np
 from dipy.io.streamline import load_tractogram
 import json
 from dipy.io.stateful_tractogram import StatefulTractogram, Space
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.dice import hcp_scores
 import ast
 from tqdm import tqdm

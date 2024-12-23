@@ -1,5 +1,6 @@
 NAME: qbx_goback_3L
-data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/dataTrInF23/qbx
+raw_data_path: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/
+data_path: ./data/dataTrInF23/qbx
 
 # subset: testset
 use_custom_batch: True

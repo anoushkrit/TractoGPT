@@ -11,7 +11,7 @@ import numpy as np
 from datasets import data_transforms
 from pointnet2_ops import pointnet2_utils
 from torchvision import transforms
-
+import os
 
 train_transforms = transforms.Compose(
     [
@@ -59,7 +59,7 @@ class Acc_Metric:
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
     # build dataset
-    config.dataset.val.others.bs = 512
+    config.dataset.val.others.bs = 256
     (train_sampler, train_dataloader), (_, test_dataloader), = builder.dataset_builder(args, config.dataset.train), \
         builder.dataset_builder(args, config.dataset.val)
     # build model
@@ -131,24 +131,14 @@ def run_net(args, config, train_writer=None, val_writer=None):
             if config.total_bs > 1:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 's3FSSknnTrInF' or 'goback_3L' in dataset_name or 'single_streamline' in dataset_name:
+            elif 'goback_3L' in dataset_name or 'single_streamline' in dataset_name:
                 points = data.squeeze().cuda()
-                label = taxonomy_ids.squeeze().cuda()
-            elif dataset_name == 'StreamlinePatchKnn':
-                points = data.cuda()
-                label = taxonomy_ids.cuda()
-            elif dataset_name == 'streamPC':
-                mainS = extra_info.squeeze().cuda()
-                points = data.squeeze().cuda()
-                label = taxonomy_ids.squeeze().cuda()
-            elif dataset_name == 's3FSSknnLRC':
-                points = data.squeeze().cuda()
-                LRC_label = extra_info.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             else:
                 points = data[0].cuda()
                 label = data[1].cuda()
 
+            # print(points.shape)
             if npoints == 1024:
                 point_all = 1200
             elif npoints == 2048:
@@ -166,28 +156,27 @@ def run_net(args, config, train_writer=None, val_writer=None):
 
             fps_idx = pointnet2_utils.furthest_point_sample(
                 points, point_all)  # (B, npoint)
+
             fps_idx = fps_idx[:, np.random.choice(point_all, npoints, False)]
             points = pointnet2_utils.gather_operation(points.transpose(
                 1, 2).contiguous(), fps_idx).transpose(1, 2).contiguous()  # (B, N, 3)
             # import pdb; pdb.set_trace()
             points = train_transforms(points)
 
-            if dataset_name == 'streamPC':
-                mainS = train_transforms(mainS)
-                ret, loss1, class_feat, _ = base_model((mainS, points))
-            elif dataset_name == 's3FSSknnLRC':
-                ret, loss1, class_feat, LRC_feat = base_model(points)
-            else:
-                ret, loss1, class_feat = base_model(points)
+            # if dataset_name == 'streamPC':
+            #     mainS = train_transforms(mainS)
+            #     ret, loss1, class_feat, _ = base_model((mainS, points))
+            # elif dataset_name == 's3FSSknnLRC':
+            #     ret, loss1, class_feat, LRC_feat = base_model(points)
+            # else:
+            ret, loss1, class_feat = base_model(points)
             
-            if dataset_name == 's3FSSknnLRC':
-                loss, acc = base_model.module.get_loss_acc(ret, label, class_feat, LRC_feat, LRC_label)
-            else:
-                loss, acc = base_model.module.get_loss_acc(ret, label, class_feat)
+            # if dataset_name == 's3FSSknnLRC':
+            #     loss, acc = base_model.module.get_loss_acc(ret, label, class_feat, LRC_feat, LRC_label)
+            # else:
+            loss, acc = base_model.module.get_loss_acc(ret, label, class_feat)
 
             _loss = loss + 3 * loss1
-            # _loss = loss + 2 * loss1
-            # _loss = loss + loss1
             
             try:
                 _loss.backward()
@@ -271,9 +260,6 @@ def run_net(args, config, train_writer=None, val_writer=None):
                         builder.save_checkpoint(
                             base_model, optimizer, epoch, metrics, best_metrics_vote, 'ckpt-best_vote', args, logger=logger)
 
-        # if (config.max_epoch - epoch) < 10:
-        #     builder.save_checkpoint(base_model, optimizer, epoch, metrics, best_metrics, f'ckpt-epoch-{epoch:03d}', args, logger = logger)
-    if train_writer is not None:
         train_writer.close()
     if val_writer is not None:
         val_writer.close()
@@ -466,6 +452,7 @@ def test_net(args, config):
 
 def test(base_model, test_dataloader, args, config, logger=None):
 
+    print(args.config)
     base_model.eval()  # set model to eval mode
     dataset_name = config.dataset.test._base_.NAME
 
@@ -484,31 +471,16 @@ def test(base_model, test_dataloader, args, config, logger=None):
             if config.total_bs > 1:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
-            elif dataset_name == 's3FSSknn' or dataset_name == 'single_streamline' or dataset_name == 's3FSSknnTrInF' or dataset_name == 'single_streamline_TrInF':
+            elif 'single_streamline' in dataset_name or 'goback_3L' in dataset_name:
                 points = data.squeeze().cuda()
-                label = taxonomy_ids.squeeze().cuda()
-            elif dataset_name == 'StreamlinePatchKnn':
-                points = data.cuda()
-                label = taxonomy_ids.cuda()
-            elif dataset_name == 'streamPC':
-                mainS = extra_info.squeeze().cuda()
-                points = data.squeeze().cuda()
-                label = taxonomy_ids.squeeze().cuda()
-            elif dataset_name == 's3FSSknnLRC':
-                points = data.squeeze().cuda()
-                LRC_label = extra_info.squeeze().cuda()
                 label = taxonomy_ids.squeeze().cuda()
             else:
                 points = data.cuda()
                 label = taxonomy_ids.cuda()
             points = misc.fps(points, npoints)
 
-            if dataset_name == 'streamPC':
-                logits, loss1, class_feat = base_model((mainS, points))
-            elif dataset_name == 's3FSSknnLRC':
-                logits, loss1, class_feat, LRC_feat = base_model(points)
-            else:
-                logits, loss1, class_feat = base_model(points)
+
+            logits, loss1, class_feat = base_model(points)
             target = label.view(-1)
 
             pred = logits.argmax(-1).view(-1)
@@ -543,118 +515,20 @@ def test(base_model, test_dataloader, args, config, logger=None):
         if args.distributed:
             torch.cuda.synchronize()
 
-        print(len(raw_streamlines), len(subjects))
-        if dataset_name == 'single_streamline_TrInF':
-            with open('predictions_new/pkls/test_pred_single_GPTM_105HCP71__TrInF32.pkl', 'wb') as f:
+
+        model = args.config.split('/')[-2] # PointGPT-M or PointGPT-S
+        pkl_path = f'predictions_new/{args.exp_name}/pkls/test_pred__{dataset_name}__{model}.pkl'
+        os.makedirs(os.path.dirname(pkl_path), exist_ok=True)
+        if 'streamline' in dataset_name:
+            with open(pkl_path, 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
-        if dataset_name == 'single_streamline':
-            with open('predictions_new/pkls/test_pred_single_GPTM_TrInF__105HCP.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
-        if dataset_name == 'single_streamline_hybrid':
-            with open('predictions_new/pkls/test_pred_single_GPTS_hybrid.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
-        if dataset_name == 'qbx_goback_3L':
-            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_105HCP71__TrInF32.pkl', 'wb') as f:
+        elif 'qbx_goback_3L' in dataset_name:
+            with open(pkl_path, 'wb') as f:
                 pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
-        if dataset_name == 'qbx_goback_3L_105HCP':
-            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTS_TrInF__105HCP.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
-        if dataset_name == 'qbx_goback_3L_hybrid':
-            with open('predictions_new/pkls/test_pred_qbx_goback_3L_GPTM_hybrid.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), subjects, streamline_label, raw_streamlines), f)
-        if dataset_name == 'goback_3L_streamline_TrInF':
-            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_105HCP71__TrInF32.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
-        if dataset_name == 'goback_3L_streamline_105HCP':
-            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_TrInF__105HCP.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
-        if dataset_name == 'goback_3L_streamline_hybrid':
-            with open('predictions_new/pkls/test_pred_goback_3L_streamline_GPTS_hybrid.pkl', 'wb') as f:
-                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy(), raw_streamlines, subjects), f)
-        
-        # print_log(f"[TEST_VOTE]", logger=logger)
-        # acc = 0.
-        # for time in range(1, 300):
-        #     this_acc = test_vote(base_model, test_dataloader,
-        #                          1, None, args, config, logger=logger, times=5)
-        #     if acc < this_acc:
-        #         acc = this_acc
-        #     print_log('[TEST_VOTE_time %d]  acc = %.4f, best acc = %.4f' %
-        #               (time, this_acc, acc), logger=logger)
-        # print_log('[TEST_VOTE] acc = %.4f' % acc, logger=logger)
+        else:
+            with open(pkl_path, 'wb') as f:
+                pickle.dump((test_label.cpu().numpy(), test_pred.cpu().numpy()), f)
 
-
-def test_vote(base_model, test_dataloader, epoch, val_writer, args, config, logger=None, times=10):
-
-    base_model.eval()  # set model to eval mode
-
-    test_pred = []
-    test_label = []
-    npoints = config.npoints
-    with torch.no_grad():
-        for idx, (taxonomy_ids, extra_info, data) in enumerate(test_dataloader):
-            points_raw = data[0].cuda()
-            label = data[1].cuda()
-            if npoints == 1024:
-                point_all = 1024
-            elif npoints == 2048:
-                point_all = 2048
-            elif npoints == 4096:
-                point_all = 4096
-            elif npoints == 8192:
-                point_all = 8192
-            else:
-                raise NotImplementedError()
-
-            if points_raw.size(1) < point_all:
-                point_all = points_raw.size(1)
-
-            fps_idx_raw = pointnet2_utils.furthest_point_sample(
-                points_raw, point_all)  # (B, npoint)
-            local_pred = []
-
-            for kk in range(times):
-                fps_idx = fps_idx_raw[:, np.random.choice(
-                    point_all, npoints, False)]
-                points = pointnet2_utils.gather_operation(points_raw.transpose(1, 2).contiguous(),
-                                                          fps_idx).transpose(1, 2).contiguous()  # (B, N, 3)
-
-                points = test_transforms(points)
-
-                logits, loss1 = base_model(points)
-                target = label.view(-1)
-
-                local_pred.append(logits.detach().unsqueeze(0))
-
-            # softmax = torch.softmax
-
-            pred = torch.cat(local_pred, dim=0).mean(0)
-            # print('pred', pred.shape)
-            # pred = softmax(1000*pred, dim=-1).mean(0)
-            _, pred_choice = torch.max(pred, -1)
-
-            test_pred.append(pred_choice)
-            test_label.append(target.detach())
-
-        test_pred = torch.cat(test_pred, dim=0)
-        test_label = torch.cat(test_label, dim=0)
-
-        if args.distributed:
-            test_pred = dist_utils.gather_tensor(test_pred, args)
-            test_label = dist_utils.gather_tensor(test_label, args)
-
-        acc = (test_pred == test_label).sum() / \
-            float(test_label.size(0)) * 100.
-
-        if args.distributed:
-            torch.cuda.synchronize()
-
-    # Add testing results to TensorBoard
-    if val_writer is not None:
-        val_writer.add_scalar('Metric/ACC_vote', acc, epoch)
-    # print_log('[TEST] acc = %.4f' % acc, logger=logger)
-
-    return acc
 
 import plotly.graph_objects as go
 def plot_3d_point_cloud_with_annotations(point_cloud, actual_labels, predicted_labels, int_label_mapping):

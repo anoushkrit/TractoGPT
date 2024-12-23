@@ -1,7 +1,8 @@
 NAME: goback_3L_streamline_105HCP
-data_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx
+raw_data_path: /scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/
+data_path: ./data/data105HCP23/qbx
 
-save_path: /scratch/anoushkrit.scee.iitmandi/github/TractoGPT/data/data105HCP23/qbx/processed_data
+save_path: ./data/data105HCP23/qbx/processed_data
 
 use_custom_batch: True
 pts_per_sample: 1024

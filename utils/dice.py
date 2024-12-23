@@ -12,7 +12,7 @@ def hcp_scores(pred_tractogram=None, gt_tractogram=None):
     import nibabel as nib
     from dipy.io.streamline import load_tractogram
     import numpy as np
-    sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/scilpy')
+    sys.path.append('./TractoGPT/scilpy')
     from scilpy.tractanalysis.streamlines_metrics import compute_tract_counts_map
     from dipy.tracking.metrics import length as slength
 

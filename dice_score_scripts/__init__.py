@@ -1,0 +1,1 @@
+from .dice_score_universal import dice_runner

@@ -11,8 +11,9 @@ from torch.utils.data import Dataset
 from scipy.interpolate import CubicSpline
 from multiprocessing import Pool, cpu_count, set_start_method
 from dipy.tracking.distances import approx_polygon_track as apt
-sys.path.append('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/')
+sys.path.append('./TractoGPT/')
 from utils.config import *
+from utils.logger import *
 import gc, pickle
 import copy
 from memory_profiler import profile
@@ -220,16 +221,17 @@ class goback_3L_streamline_hybrid(Dataset):
 
         if self.use_resampled_streamline:
             raise NotImplementedError('Resampled Streamlines not implemented yet')
-
         self.label_int_mapping = self.load_label_mapping()
-        print(datetime.datetime.now())
+
         if self.subset == 'test' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
+            print_log(f'Loading {self.subset} data from {self.save_path}', logger='goback_3L_streamline_hybrid')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels= pickle.load(f)
                 for i in self.streamlines.keys():
                     self.streamlines[i] = blist(self.streamlines[i])
             
             if type(self.config.subject_ids) == list:
+                print_log(f'Using only the given subjects for {self.subset}', logger='goback_3L_streamline_hybrid')
                 self.pc_cluster = [self.pc_cluster[i] for i in range(len(self.pc_cluster)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.pc_cluster_labels = [self.pc_cluster_labels[i] for i in range(len(self.pc_cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
                 self.cluster_labels = [self.cluster_labels[i] for i in range(len(self.cluster_labels)) if self.cluster[i][0].split('_')[0] in self.config.subject_ids]
@@ -257,22 +259,25 @@ class goback_3L_streamline_hybrid(Dataset):
 
 
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
-            print(os.path.join(self.save_path, f'{self.subset}.pkl'))
+            print_log(f'Loading {self.subset} data from {self.save_path}', logger='goback_3L_streamline_hybrid')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
                 self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
             
             self.load_resampled_memmaps()
-            print(self.resampled_streamlines.keys())
-            print(len(self.pc_cluster), len(self.pc_cluster_labels), len(self.cluster), len(self.cluster_labels))
         else:
             self.load_and_process_data()
-        print(datetime.datetime.now())
+
+        print_log(f'Loaded {len(self.pc_cluster)} samples', logger='qbx_goback_3L_hybrid')
+        print_log(f'Loaded {len(self.cluster)} clusters', logger='qbx_goback_3L_hybrid')
+        print_log(f'[DATASET] Building custom batches', logger='qbx_goback_3L')
         if self.use_custom_batch:
             self.create_custom_batches()
-        print(datetime.datetime.now())
     
     def load_resampled_memmaps(self):
         base_path = os.path.join(self.save_path, f'resampled_streamlines_{self.config.pts_per_streamline}', self.subset)
+        if not os.path.exists(base_path):
+            self.make_save_resampled_streamlines()
+        print_log(f'Loading resampled streamlines from {base_path}', logger='goback_3L_streamline_hybrid')
         subjects = os.listdir(base_path)
         
         self.resampled_streamlines = {}
@@ -330,6 +335,7 @@ class goback_3L_streamline_hybrid(Dataset):
         os.makedirs(output_dir, exist_ok=True)
 
         # Create the pool outside of the loop
+        print_log(f'Saving resampled streamlines to {output_dir}', logger='goback_3L_streamline_hybrid')
         with Pool() as p:
             for i, subject in enumerate(subjects):
                 inp = [(data[i][4][j], self.config.pts_per_streamline) for j in range(len(data[i][4]))]
@@ -344,7 +350,7 @@ class goback_3L_streamline_hybrid(Dataset):
 
                 del resampled_streamlines
                 # self.resampled_streamlines[subject.split('.')[0]] = memmap
-
+        print_log('Resampled Streamlines saved', logger='goback_3L_streamline_hybrid')
         gc.collect()
 
     def load_and_process_data(self):
@@ -357,7 +363,6 @@ class goback_3L_streamline_hybrid(Dataset):
         for subject in subjects:
             inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.streamline_threshold_per_cluster, self.subset == 'test'))
         with Pool() as p:
-            print('inside pool')
             data = p.map(load_data, inp)
         
         self.pc_cluster = []
@@ -482,7 +487,7 @@ class goback_3L_streamline_hybrid(Dataset):
             return len(self.custom_batches)
         
 #%%
-# config = cfg_from_yaml_file('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/cfgs/dataset_configs/goback_3L_streamline_hybrid.yaml')
+# config = cfg_from_yaml_file('./TractoGPT/cfgs/dataset_configs/goback_3L_streamline_hybrid.yaml')
 # dataset = goback_3L_streamline_hybrid(config)
 # import time
 # print('sleeping')
@@ -541,7 +546,7 @@ class goback_3L_streamline_hybrid(Dataset):
 # plot_point_cloud(pc[8], title = int(label[11]))
 # #%%
 # import json 
-# with open('/scratch/anoushkrit.scee.iitmandi/github/TractoGPT/label_int_mappings/label_int_mapping_hybrid.json', 'r') as f:
+# with open('./TractoGPT/label_int_mappings/label_int_mapping_hybrid.json', 'r') as f:
 #     label_mapping = json.load(f)
 # int_label_mapping = {v: k for k, v in label_mapping.items()}
 # print(int_label_mapping)

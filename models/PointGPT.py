@@ -708,6 +708,7 @@ class PointGPT(nn.Module):
 
             return generated_points, gt_points, center
 
+        # print(loss1, loss2)
         return loss1 + loss2
 
 
