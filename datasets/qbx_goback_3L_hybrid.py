@@ -205,6 +205,13 @@ class qbx_goback_3L_hybrid(Dataset):
                 raw_data_path=self.raw_data_path2,
                 subset=[self.subset]
             )
+            # merge the two datasets
+            if 'train' in os.listdir(self.save_path) and 'trainset' in os.listdir(self.save_path):
+                self.merge_folders(os.path.join(self.save_path, 'train'), os.path.join(self.save_path, 'trainset'))
+            if 'val' in os.listdir(self.save_path) and 'validset' in os.listdir(self.save_path):
+                self.merge_folders(os.path.join(self.save_path, 'val'), os.path.join(self.save_path, 'validset'))
+            if 'test' in os.listdir(self.save_path) and 'testset' in os.listdir(self.save_path):
+                self.merge_folders(os.path.join(self.save_path, 'test'), os.path.join(self.save_path, 'testset'))
 
 
         if self.subset == 'test' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
@@ -244,7 +251,24 @@ class qbx_goback_3L_hybrid(Dataset):
             label_mapping = json.load(f)
         
         return label_mapping
+    def merge_folders(self, folder_a, folder_b):
+        # Ensure the destination folder exists
+        if not os.path.exists(folder_a):
+            os.makedirs(folder_a)
 
+        # Iterate through all files and folders in folder_b
+        for item in os.listdir(folder_b):
+            source_path = os.path.join(folder_b, item)
+            destination_path = os.path.join(folder_a, item)
+
+            # If it's a directory, copy recursively
+            if os.path.isdir(source_path):
+                shutil.copytree(source_path, destination_path, dirs_exist_ok=True)
+            else:
+                # If it's a file, copy it
+                shutil.copy2(source_path, destination_path)
+
+        print_log(f"Contents of '{folder_b}' have been merged into '{folder_a}'.", logger='qbx_goback_3L_hybrid')
     def create_custom_batches(self):
         unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
         batch_size = self.samples_per_class_per_batch*len(unique_labels)

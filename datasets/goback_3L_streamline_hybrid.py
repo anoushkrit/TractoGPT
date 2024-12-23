@@ -144,7 +144,7 @@ def create_clusters_subject(args):
 
     return (clusters, pc_cluster_labels)
 def load_data(args):
-    pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test = args
+    pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test, subject, pts_per_streamline, save_path, subset = args
     level = 3
     subject_data = {}
     subject_id = os.path.basename(pth).split('.')[0]
@@ -157,8 +157,13 @@ def load_data(args):
     subject_data['cluster_ids_l1'] = data_x[:,level-2]
     subject_data['cluster_ids_l2'] = data_x[:,level-1]
     subject_data['cluster_ids_l3'] = data_x[:,level]
+    del data_x
+    del data
 
     cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
+    subject_data['cluster_ids_l1'] = None
+    subject_data['cluster_ids_l2'] = None
+    subject_data['cluster_ids_l3'] = None
 
     pc_cluster = np.zeros((len(cluster), pts_per_sample, 3))
     for i in range(len(cluster)):
@@ -169,8 +174,29 @@ def load_data(args):
         streamline_idx = np.array([int(cluster[i][j].split('_')[1]) for j in range(len(cluster[i]))])
         cluster_labels.append(subject_data['label'][streamline_idx])
 
-    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, blist(subject_data['streamlines']), subject_data['label'])
-    # return (pc_cluster, pc_cluster_labels, cluster, cluster_labels)
+    # resampling streamline
+    output_dir = os.path.join(save_path, f'resampled_streamlines_{pts_per_streamline}', subset)
+    os.makedirs(output_dir, exist_ok=True)
+    inp = [(subject_data['streamlines'][i], pts_per_streamline) for j in range(len(subject_data['streamlines']))]
+    with Pool(20) as p:
+        resampled_streamlines = p.map(choose_upORdownsample, inp)
+    
+    resampled_streamlines = np.array(resampled_streamlines)
+    # Directly write to memmap
+    filename = os.path.join(output_dir, f'{subject.split(".")[0]}__{len(resampled_streamlines)}.dat')
+    memmap = np.memmap(filename, dtype='float32', mode='w+', shape=(resampled_streamlines.shape))
+    memmap[:] = np.array(resampled_streamlines)  # Reshape if necessary
+    memmap.flush()
+    del resampled_streamlines   
+
+    subject_labels = subject_data['label']
+    streamlines = subject_data['streamlines']
+    del subject_data
+    gc.collect()
+    
+    if test:
+        return (pc_cluster, pc_cluster_labels, cluster, None, streamlines, subject_labels)
+    return (pc_cluster, pc_cluster_labels, cluster, None, None, subject_labels)
 
 def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args

@@ -453,7 +453,6 @@ class goback_3L_streamline_TrInF(Dataset):
                 
         self.load_resampled_memmaps()
         if self.subset != 'testset':
-            # self.make_save_resampled_streamlines((data, subjects))
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
         else:
@@ -470,11 +469,9 @@ class goback_3L_streamline_TrInF(Dataset):
             
             if(start!=streamline_count):
                 print(start, streamline_count)
-        #     # self.make_save_resampled_streamlines((data, subjects))
-        #     self.load_resampled_memmaps()
-        #     with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-        #         pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
+        del data
         gc.collect()
+
 
     def map_batch_labels(self, labels):
         int_labels = [int(self.label_int_mapping[class_label]) for class_label in labels]

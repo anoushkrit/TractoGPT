@@ -193,8 +193,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # print(args.model, args.exp_name, args.dataset_name, args.mapping_path)
-    pickle_path = f'predictions_new/test_{args.exp_name}/pkls/test_pred__{args.dataset_name}__{args.model}.pkl'
-    output_path = f'predictions_new/test_{args.exp_name}/results/test_pred__{args.dataset_name}__{args.model}.json'
+    pickle_path = f'predictions_new/test_{args.exp_name}/{args.dataset_name}/pkls/test_pred__{args.model}.pkl'
+    output_path = f'predictions_new/test_{args.exp_name}/{args.dataset_name}/results/test_pred__{args.model}.json'
     json_dice = calculate_hcp_scores(pickle_path, args.mapping_path, output_path, args.dataset_name)
     # with open (output_path, 'r') as f:
     #     json_dice = json.load(f)

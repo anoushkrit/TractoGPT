@@ -145,7 +145,7 @@ def create_clusters_subject(args):
 
     return (clusters, pc_cluster_labels)
 def load_data(args):
-    pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test = args
+    pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test, subject, pts_per_streamline, save_path, subset = args
     level = 3
     subject_data = {}
     subject_id = os.path.basename(pth).split('.')[0]
@@ -170,10 +170,28 @@ def load_data(args):
         streamline_idx = np.array([int(cluster[i][j].split('_')[1]) for j in range(len(cluster[i]))])
         cluster_labels.append(subject_data['label'][streamline_idx])
 
+    output_dir = os.path.join(save_path, f'resampled_streamlines_{pts_per_streamline}', subset)
+    os.makedirs(output_dir, exist_ok=True)
+    inp = [(subject_data['streamlines'][i], pts_per_streamline) for j in range(len(subject_data['streamlines']))]
+    with Pool(20) as p:
+        resampled_streamlines = p.map(choose_upORdownsample, inp)
+    
+    resampled_streamlines = np.array(resampled_streamlines)
+    # Directly write to memmap
+    filename = os.path.join(output_dir, f'{subject.split(".")[0]}__{len(resampled_streamlines)}.dat')
+    memmap = np.memmap(filename, dtype='float32', mode='w+', shape=(resampled_streamlines.shape))
+    memmap[:] = np.array(resampled_streamlines)  # Reshape if necessary
+    memmap.flush()
+    del resampled_streamlines   
+
+    subject_labels = subject_data['label']
+    streamlines = subject_data['streamlines']
+    del subject_data
+
     if test:
-        return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
+        return (pc_cluster, pc_cluster_labels, cluster, None, streamlines, subject_labels)
     else:
-        return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
+        return (pc_cluster, pc_cluster_labels, cluster, None, None, subject_labels)
 
 def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args
@@ -273,9 +291,15 @@ class goback_3L_streamline_105HCP(Dataset):
                 print(start, streamline_count)
                 
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
-            print_log(f'Loading {self.subset} data from {self.save_path}', logger='goback_3L_streamline_105HCP')
+            print_log(f'Loading {self.subset} from {self.save_path}', logger='goback_3L_streamline_hybrid')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
+                data = pickle.load(f)
+                if len(data) != 5:
+                    del data
+                    print_log(f'Loaded Data is not correct. Processing again', logger='goback_3L_streamline_hybrid')
+                    self.load_and_process_data()
+                else:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = data
             
             self.load_resampled_memmaps()
         else:
@@ -372,39 +396,74 @@ class goback_3L_streamline_105HCP(Dataset):
             
         inp = []
         for subject in subjects:
-            inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.streamline_threshold_per_cluster, self.subset == 'test'))
-        with Pool() as p:
-            # data = p.map(load_data, inp)
-            print_log(f'Processing 3 level to form clusters', logger='goback_3L_streamline_105HCP')
-            data = list(tqdm(p.imap(load_data, inp), total=len(inp)))
-        
-        self.pc_cluster = []
+            inp.append((os.path.join(self.data_path,subject), 
+                        self.use_resampled_streamline,
+                        self.pts_per_sample,
+                        self.streamline_threshold_per_cluster,
+                        self.subset == 'test',
+                        subject,
+                        self.config.pts_per_streamline,
+                        self.save_path,
+                        self.subset
+                        ))
+        # with pool() as p:
+        #     # data = p.map(load_data, inp)
+        #     print_log(f'Processing 3 level to form clusters', logger='goback_3L_streamline_105HCP')
+        #     data = list(tqdm(p.imap(load_data, inp), total=len(inp)))
+        _cluster = []
         self.pc_cluster_labels = []
         self.cluster = []
         self.cluster_labels = []
         self.streamlines = {}
         self.streamline_labels = {}
-        for i in range(len(data)):
-            self.pc_cluster.extend(data[i][0])
-            self.pc_cluster_labels.extend(data[i][1])
-            self.cluster.extend(data[i][2])
-            self.cluster_labels.extend(data[i][3])
-            self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
-            if self.subset == 'test':
-                self.streamlines[subjects[i].split('.')[0]] = data[i][4]
+        for i in tqdm(range(len(inp))):
+            data = load_data(inp[i])
+            self.pc_cluster.extend(data[0])
+            self.pc_cluster_labels.extend(data[1])
+            self.cluster.extend(data[2])
+            if data[3] is not None:
+                self.cluster_labels.extend(data[3])
+            self.streamline_labels[subjects[i].split('.')[0]] = data[5]
+            if self.subset == 'testset':
+                self.streamlines[subjects[i].split('.')[0]] = data[4]
+        
+        # self.pc_cluster = []
+        # self.pc_cluster_labels = []
+        # self.cluster = []
+        # self.cluster_labels = []
+        # self.streamlines = {}
+        # self.streamline_labels = {}
+        # for i in range(len(data)):
+        #     self.pc_cluster.extend(data[i][0])
+        #     self.pc_cluster_labels.extend(data[i][1])
+        #     self.cluster.extend(data[i][2])
+        #     self.cluster_labels.extend(data[i][3])
+        #     self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
+        #     if self.subset == 'test':
+        #         self.streamlines[subjects[i].split('.')[0]] = data[i][4]
         
 
         self.pc_cluster = np.array(self.pc_cluster)
         self.pc_cluster_labels = np.array(self.pc_cluster_labels)
                 
+        self.load_resampled_memmaps()
         if self.subset != 'test':
-            self.make_save_resampled_streamlines((data, subjects))
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
         else:
-            self.make_save_resampled_streamlines((data, subjects))
-            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
+            streamline_count = 0
+            for i in self.streamlines.keys():
+                streamline_count += len(self.streamlines[i])
+
+            self.streamline_to_cluster = np.zeros((streamline_count,2), dtype=np.int64)
+            start=0
+            for i, cluster in enumerate(self.cluster):
+                for j in range(len(cluster)):
+                    self.streamline_to_cluster[start+j] = [i,j]
+                start += len(cluster)
+            
+            if(start!=streamline_count):
+                print(start, streamline_count)
         del data
         gc.collect()
 
