@@ -20,6 +20,7 @@ import copy
 from memory_profiler import profile
 from collections import defaultdict
 from .build import DATASETS
+import shutil
 
 #%%
 def create_clusters_subject(args):
@@ -119,6 +120,8 @@ def load_data(args):
     subject_data['cluster_ids_l1'] = data_x[:,level-2]
     subject_data['cluster_ids_l2'] = data_x[:,level-1]
     subject_data['cluster_ids_l3'] = data_x[:,level]
+    del data_x
+    del data
 
     cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
 
@@ -131,8 +134,14 @@ def load_data(args):
         streamline_idx = np.array([int(cluster[i][j].split('_')[1]) for j in range(len(cluster[i]))])
         cluster_labels.append(subject_data['label'][streamline_idx])
 
-    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, subject_data['streamlines'], subject_data['label'])
-
+    streamlines = subject_data['streamlines']
+    subject_labels = subject_data['label']
+    del subject_data
+    gc.collect()
+    if test:
+        return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, streamlines, subject_labels)
+    return (pc_cluster, pc_cluster_labels, cluster, cluster_labels, None, subject_labels)
+    
 def concat_streamlines(args):
     data, indices, use_resampled_streamline, pts_per_sample = args
     subject_id = indices[0].split('_')[0]      
@@ -205,13 +214,14 @@ class qbx_goback_3L_hybrid(Dataset):
                 raw_data_path=self.raw_data_path2,
                 subset=[self.subset]
             )
-            # merge the two datasets
-            if 'train' in os.listdir(self.save_path) and 'trainset' in os.listdir(self.save_path):
-                self.merge_folders(os.path.join(self.save_path, 'train'), os.path.join(self.save_path, 'trainset'))
-            if 'val' in os.listdir(self.save_path) and 'validset' in os.listdir(self.save_path):
-                self.merge_folders(os.path.join(self.save_path, 'val'), os.path.join(self.save_path, 'validset'))
-            if 'test' in os.listdir(self.save_path) and 'testset' in os.listdir(self.save_path):
-                self.merge_folders(os.path.join(self.save_path, 'test'), os.path.join(self.save_path, 'testset'))
+        # merge the two datasets
+        print_log(f'[DATASET] Merging the two datasets', logger='qbx_goback_3L_hybrid')
+        if 'train' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'trainset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
+            self.merge_folders(os.path.join('/'.join(self.data_path.split('/')[:-1]), 'train'), os.path.join('/'.join(self.data_path.split('/')[:-1]), 'trainset'))
+        if 'val' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'validset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
+            self.merge_folders(os.path.join('/'.join(self.data_path.split('/')[:-1]), 'val'), os.path.join('/'.join(self.data_path.split('/')[:-1]), 'validset'))
+        if 'test' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'testset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
+            self.merge_folders(os.path.join('/'.join(self.data_path.split('/')[:-1]), 'test'), os.path.join('/'.join(self.data_path.split('/')[:-1]), 'testset'))
 
 
         if self.subset == 'test' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
@@ -233,7 +243,11 @@ class qbx_goback_3L_hybrid(Dataset):
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             print_log(f'Loading {self.subset} data from {self.save_path}', logger='qbx_goback_3L_hybrid')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
+                data = pickle.load(f)
+                if len(data) == 4:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels = data
+                elif len(data) == 5:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, _ = data
         else: 
             print_log(f'Loading and Processing {self.subset} data', logger='qbx_goback_3L_hybrid')
             self.load_and_process_data()
@@ -267,8 +281,11 @@ class qbx_goback_3L_hybrid(Dataset):
             else:
                 # If it's a file, copy it
                 shutil.copy2(source_path, destination_path)
-
+        
+        # delete the folder_b
+        shutil.rmtree(folder_b)
         print_log(f"Contents of '{folder_b}' have been merged into '{folder_a}'.", logger='qbx_goback_3L_hybrid')
+        gc.collect()
     def create_custom_batches(self):
         unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
         batch_size = self.samples_per_class_per_batch*len(unique_labels)
@@ -290,14 +307,15 @@ class qbx_goback_3L_hybrid(Dataset):
 
     def load_and_process_data(self):
 
-        subjects = [subject for subject in Path(self.data_path).iterdir() if os.path.isfile(subject)]
+        subjects = [subject for subject in os.listdir(self.data_path) if subject.endswith('.pkl')]
         if self.subset == 'test' and type(self.config.subject_ids) == list: # using only the given subjects
-            subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
+            subjects = [subject for subject in subjects if subject.split('.')[0] in self.config.subject_ids]
         inp = []
         for subject in subjects:
             inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.min_threshold_per_cluster, self.subset == 'test'))
         with Pool() as p:
-            data = p.map(load_data, inp)
+            # data = p.map(load_data, inp)
+            data = list(tqdm(p.imap(load_data, inp), total=len(inp)))
         
         self.pc_cluster = []
         self.pc_cluster_labels = []
@@ -310,19 +328,20 @@ class qbx_goback_3L_hybrid(Dataset):
             self.pc_cluster_labels.extend(data[i][1])
             self.cluster.extend(data[i][2])
             self.cluster_labels.extend(data[i][3])
-            self.streamline_labels[subjects[i].name.split('.')[0]] = data[i][5]
+            self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
             if self.subset == 'test':
-                self.streamlines[subjects[i].name.split('.')[0]] = data[i][4]
+                self.streamlines[subjects[i].split('.')[0]] = data[i][4]
         
         self.pc_cluster = np.array(self.pc_cluster)
         self.pc_cluster_labels = np.array(self.pc_cluster_labels)
         
+        os.makedirs(self.save_path, exist_ok=True)
         if self.subset != 'test':
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
-        else:
-            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
+                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels), f)
+        # else:
+        #     with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
+        #         pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
         del data
         gc.collect()
 

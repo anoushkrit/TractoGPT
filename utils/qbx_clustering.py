@@ -101,8 +101,8 @@ def load_HCP(tracts_directory, label_int_mapping:dict):
             num_streamlines = len(tractogram.streamlines)
         else:
             raise Warning(f"Warning: {path} is not a trk file, skipping")
-        with open(os.path.join(tracts_directory, f"{dataset}_{subject}.txt"), "a") as f:
-            f.write(f"Number of Streamline in {label} is {num_streamlines}\n")
+        # with open(os.path.join(tracts_directory, f"{dataset}_{subject}.txt"), "a") as f:
+        #     f.write(f"Number of Streamline in {label} is {num_streamlines}\n")
         for s in tractogram.streamlines:
             labels.append(label)
             tracks.append(s)

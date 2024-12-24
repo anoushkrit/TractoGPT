@@ -205,7 +205,11 @@ class qbx_goback_3L(Dataset):
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             print_log(f'[DATASET] Loading Processed Data', logger='qbx_goback_3L')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels = pickle.load(f)
+                data = pickle.load(f)
+                if len(data) == 4:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels = data
+                elif len(data) == 5:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, _ = data
             self.cluster = blist(self.cluster)
             self.cluster_labels = blist(self.cluster_labels)
         else:
@@ -247,16 +251,10 @@ class qbx_goback_3L(Dataset):
 
         # subjects = [subject for subject in Path(self.data_path).iterdir() if os.path.isfile(subject)]
         subjects = [subject for subject in os.listdir(self.data_path) if os.path.isfile(os.path.join(self.data_path, subject))]
-        print(subjects)
-        print(self.config.subject_ids)
         if self.subset == 'testset' and type(self.config.subject_ids) == list: # using only the given subjects
             # subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
             subjects = [subject for subject in subjects if subject.split('.')[0] in self.config.subject_ids]
-        print(subjects)
-        print(subjects)
-        print(subjects)
-        print(subjects)
-        print(subjects)
+
         inp = []
         for subject in subjects:
             inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.min_threshold_per_cluster, self.subset == 'testset'))

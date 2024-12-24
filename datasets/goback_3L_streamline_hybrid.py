@@ -14,11 +14,12 @@ from dipy.tracking.distances import approx_polygon_track as apt
 sys.path.append('./TractoGPT/')
 from utils.config import *
 from utils.logger import *
+from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
 import gc, pickle
 import copy
 from memory_profiler import profile
 from collections import defaultdict
-
+import shutil
 from .build import DATASETS
 
 #%%
@@ -249,6 +250,36 @@ class goback_3L_streamline_hybrid(Dataset):
             raise NotImplementedError('Resampled Streamlines not implemented yet')
         self.label_int_mapping = self.load_label_mapping()
 
+        if not os.path.exists(self.data_path):
+            print_log(f'[DATASET] Data path {self.data_path} does not exist', logger='qbx_goback_3L_hybrid')
+            print_log(f'[DATASET] Creating QBX clusters', logger='qbx_goback_3L_hybrid')
+            if self.subset in ['train', 'test']:
+                TrInF_subset = self.subset+'set'
+            else:
+                TrInF_subset = self.subset+'idset'
+            create_qbx_cluster_from_scratch_n_save(
+                dataset='TractoInferno',
+                mapping=self.label_int_mapping,
+                save_path='/'.join(self.data_path.split('/')[:-1]),
+                raw_data_path=self.raw_data_path1,
+                subset=[TrInF_subset]
+            )
+            create_qbx_cluster_from_scratch_n_save(
+                dataset='105HCP',
+                mapping=self.label_int_mapping,
+                save_path='/'.join(self.data_path.split('/')[:-1]),
+                raw_data_path=self.raw_data_path2,
+                subset=[self.subset]
+            )
+        # merge the two datasets
+        print_log(f'[DATASET] Merging the two datasets', logger='qbx_goback_3L_hybrid')
+        if 'train' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'trainset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
+            self.merge_folders(os.path.join('/'.join(self.data_path.split('/')[:-1]), 'train'), os.path.join('/'.join(self.data_path.split('/')[:-1]), 'trainset'))
+        if 'val' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'validset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
+            self.merge_folders(os.path.join('/'.join(self.data_path.split('/')[:-1]), 'val'), os.path.join('/'.join(self.data_path.split('/')[:-1]), 'validset'))
+        if 'test' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'testset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
+            self.merge_folders(os.path.join('/'.join(self.data_path.split('/')[:-1]), 'test'), os.path.join('/'.join(self.data_path.split('/')[:-1]), 'testset'))
+
         if self.subset == 'test' and os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             print_log(f'Loading {self.subset} data from {self.save_path}', logger='goback_3L_streamline_hybrid')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
@@ -287,16 +318,21 @@ class goback_3L_streamline_hybrid(Dataset):
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             print_log(f'Loading {self.subset} data from {self.save_path}', logger='goback_3L_streamline_hybrid')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
+                data = pickle.load(f)
+                if len(data) != 5:
+                    del data
+                    print_log(f'Loaded Data is not correct. Processing again', logger='goback_3L_streamline_hybrid')
+                    self.load_and_process_data()
+                else:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = data
             
             self.load_resampled_memmaps()
         else:
             self.load_and_process_data()
 
-        print_log(f'Loaded {len(self.pc_cluster)} samples', logger='qbx_goback_3L_hybrid')
-        print_log(f'Loaded {len(self.cluster)} clusters', logger='qbx_goback_3L_hybrid')
-        print_log(f'[DATASET] Building custom batches', logger='qbx_goback_3L')
+        print_log(f'Loaded {len(self.pc_cluster)} samples', logger='goback_3L_streamline_hybrid')
         if self.use_custom_batch:
+            print_log(f'[DATASET] Building custom batches', logger='goback_3L_streamline_hybrid')
             self.create_custom_batches()
     
     def load_resampled_memmaps(self):
@@ -320,10 +356,30 @@ class goback_3L_streamline_hybrid(Dataset):
         
         return label_mapping
 
+    def merge_folders(self, folder_a, folder_b):
+        # Ensure the destination folder exists
+        if not os.path.exists(folder_a):
+            os.makedirs(folder_a)
+
+        # Iterate through all files and folders in folder_b
+        for item in os.listdir(folder_b):
+            source_path = os.path.join(folder_b, item)
+            destination_path = os.path.join(folder_a, item)
+
+            # If it's a directory, copy recursively
+            if os.path.isdir(source_path):
+                shutil.copytree(source_path, destination_path, dirs_exist_ok=True)
+            else:
+                # If it's a file, copy it
+                shutil.copy2(source_path, destination_path)
+        
+        # delete the folder_b
+        shutil.rmtree(folder_b)
+        print_log(f"Contents of '{folder_b}' have been merged into '{folder_a}'.", logger='qbx_goback_3L_hybrid')
+        gc.collect()
+
     def create_custom_batches(self):
         unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
-        print(label_counts)
-        print('min label count: ',min(label_counts))
         batch_size = self.pc_samples_per_class_per_batch*len(unique_labels)*self.fusion_streamline_per_cluster
         num_batches = max(int(min(label_counts)//self.pc_samples_per_class_per_batch), self.min_batches)
         self.custom_batches = np.zeros((num_batches, batch_size, 2), dtype=int)
@@ -383,13 +439,22 @@ class goback_3L_streamline_hybrid(Dataset):
 
         subjects = [subject for subject in os.listdir(self.data_path) if os.path.isfile(os.path.join(self.data_path, subject))]
         if self.subset == 'test' and type(self.config.subject_ids) == list: # using only the given subjects
-            subjects = [subject for subject in subjects if subject.name in self.config.subject_ids]
-            
+            subjects = [subject for subject in subjects if subject.split('.')[0] in self.config.subject_ids]
+        
         inp = []
         for subject in subjects:
-            inp.append((os.path.join(self.data_path,subject), self.use_resampled_streamline, self.pts_per_sample, self.streamline_threshold_per_cluster, self.subset == 'test'))
-        with Pool() as p:
-            data = p.map(load_data, inp)
+            inp.append((os.path.join(self.data_path,subject), 
+                        self.use_resampled_streamline,
+                        self.pts_per_sample,
+                        self.streamline_threshold_per_cluster,
+                        self.subset == 'testset',
+                        subject,
+                        self.config.pts_per_streamline,
+                        self.save_path,
+                        self.subset
+                        ))
+        # with Pool() as p:
+        #     data = p.map(load_data, inp)
         
         self.pc_cluster = []
         self.pc_cluster_labels = []
@@ -397,27 +462,54 @@ class goback_3L_streamline_hybrid(Dataset):
         self.cluster_labels = []
         self.streamlines = {}
         self.streamline_labels = {}
-        for i in range(len(data)):
-            self.pc_cluster.extend(data[i][0])
-            self.pc_cluster_labels.extend(data[i][1])
-            self.cluster.extend(data[i][2])
-            self.cluster_labels.extend(data[i][3])
-            self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
-            if self.subset == 'test':
-                self.streamlines[subjects[i].split('.')[0]] = data[i][4]
+        for i in tqdm(range(len(inp))):
+            data = load_data(inp[i])
+            self.pc_cluster.extend(data[0])
+            self.pc_cluster_labels.extend(data[1])
+            self.cluster.extend(data[2])
+            if data[3] is not None:
+                self.cluster_labels.extend(data[3])
+            self.streamline_labels[subjects[i].split('.')[0]] = data[5]
+            if self.subset == 'testset':
+                self.streamlines[subjects[i].split('.')[0]] = data[4]
+            
+        # self.pc_cluster = []
+        # self.pc_cluster_labels = []
+        # self.cluster = []
+        # self.cluster_labels = []
+        # self.streamlines = {}
+        # self.streamline_labels = {}
+        # for i in range(len(data)):
+        #     self.pc_cluster.extend(data[i][0])
+        #     self.pc_cluster_labels.extend(data[i][1])
+        #     self.cluster.extend(data[i][2])
+        #     self.cluster_labels.extend(data[i][3])
+        #     self.streamline_labels[subjects[i].split('.')[0]] = data[i][5]
+        #     if self.subset == 'test':
+        #         self.streamlines[subjects[i].split('.')[0]] = data[i][4]
         
 
         self.pc_cluster = np.array(self.pc_cluster)
         self.pc_cluster_labels = np.array(self.pc_cluster_labels)
-                
+
+        self.load_resampled_memmaps()                
         if self.subset != 'test':
-            self.make_save_resampled_streamlines((data, subjects))
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
                 pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
         else:
-            self.make_save_resampled_streamlines((data, subjects))
-            with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)
+            streamline_count = 0
+            for i in self.streamlines.keys():
+                streamline_count += len(self.streamlines[i])
+
+            self.streamline_to_cluster = np.zeros((streamline_count,2), dtype=np.int64)
+            start=0
+            for i, cluster in enumerate(self.cluster):
+                for j in range(len(cluster)):
+                    self.streamline_to_cluster[start+j] = [i,j]
+                start += len(cluster)
+            
+            if(start!=streamline_count):
+                print(start, streamline_count)
         del data
         gc.collect()
 

@@ -119,7 +119,10 @@ def load_data(args):
     subject_data['cluster_ids_l1'] = data_x[:,level-2]
     subject_data['cluster_ids_l2'] = data_x[:,level-1]
     subject_data['cluster_ids_l3'] = data_x[:,level]
-
+    del data_x
+    del data
+    gc.collect()
+    
     cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
 
     pc_cluster = np.zeros((len(cluster), pts_per_sample, 3))
@@ -217,8 +220,11 @@ class qbx_goback_3L_105HCP(Dataset):
         elif os.path.exists(os.path.join(self.save_path, f'{self.subset}.pkl')):
             print_log(f'Loading {self.subset} data from {self.save_path}', logger='qbx_goback_3L_105HCP')
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'rb') as f:
-                self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels = pickle.load(f)
-            del self.streamline_labels
+                data = pickle.load(f)
+                if len(data) == 4:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels = data
+                elif len(data) == 5:
+                    self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, _ = data
             del self.cluster_labels
             del self.cluster
         else:
@@ -287,7 +293,7 @@ class qbx_goback_3L_105HCP(Dataset):
         
         if self.subset != 'test':
             with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
-                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamline_labels), f)
+                pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels), f)
         # else:
         #     with open(os.path.join(self.save_path, f'{self.subset}.pkl'), 'wb') as f:
         #         pickle.dump((self.pc_cluster, self.pc_cluster_labels, self.cluster, self.cluster_labels, self.streamlines, self.streamline_labels), f)

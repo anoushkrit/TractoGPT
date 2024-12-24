@@ -7,7 +7,7 @@ save_path: ./data/data_hybrid/qbx/processed_data
 # subset: test
 use_custom_batch: True
 pts_per_sample: 1024
-minimum_batches: 1000
+minimum_batches: 10
 samples_per_class_per_batch: 8
 use_resampled_streamline: False
 label_mapping_path: label_int_mappings/label_int_mapping_hybrid.json
