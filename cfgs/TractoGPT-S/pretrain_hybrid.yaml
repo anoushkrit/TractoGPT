@@ -6,25 +6,25 @@ dataset:
   {
     train:
       {
-        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        _base_: cfgs/dataset_configs/qbx_goback_3L_hybrid.yaml,
         others: { subset: "train", npoints: 1024 },
       },
     val:
       {
-        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        _base_: cfgs/dataset_configs/qbx_goback_3L_hybrid.yaml,
         others: { subset: "val", npoints: 1024 },
       },
     test:
       {
-        _base_: cfgs/dataset_configs/qbx_goback_3L_105HCP.yaml,
+        _base_: cfgs/dataset_configs/qbx_goback_3L_hybrid.yaml,
         others: { subset: "test", npoints: 1024 },
       },
   }
 
 model:
   {
-    NAME: PointGPT,
-    cls_dim: 25,
+    NAME: TractoGPT,
+    cls_dim: 32,
     group_size: 32,
     num_group: 64,
     loss: cdl12,
@@ -33,17 +33,17 @@ model:
       {
         mask_ratio: 0.7,
         mask_type: "rand",
-        trans_dim: 256,
-        encoder_dims: 256,
-        depth: 9,
+        trans_dim: 384,
+        encoder_dims: 384,
+        depth: 12,
         drop_path_rate: 0.1,
-        num_heads: 4,
+        num_heads: 6,
         decoder_depth: 4,
         decoder_num_heads: 6,
       },
   }
 
 npoints: 1024
-total_bs: 1  # bs==1 when using custom batch created using dataloader
+total_bs: 1
 step_per_update: 1
 max_epoch: 300

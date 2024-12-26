@@ -17,6 +17,7 @@ from dipy.tracking.distances import approx_polygon_track as apt
 sys.path.append('./TractoGPT')
 from utils.config import *
 from utils.logger import *
+from utils.streamline_ops import *
 import gc, pickle
 from dipy.tracking.streamline import select_random_set_of_streamlines
 import copy
@@ -27,46 +28,6 @@ def load_stream(trk_path):
     bundle_track = load_tractogram(str(trk_path), 'same', bbox_valid_check=False)
     return list(bundle_track.streamlines)
 
-def downsample(args):
-    streamline, pts = args
-    streamline = apt(streamline,.1)
-    if len(streamline) != pts: 
-        resampled_streamline = interp_streamline((streamline, pts))
-    else:
-        resampled_streamline = streamline
-    return resampled_streamline
-
-def interp_streamline(args):
-    streamline, pts = args
-    old_points = np.linspace(0, 1, streamline.shape[0])
-    new_points = np.linspace(0, 1, pts)
-
-    # x_old = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), streamline.shape[0])
-    # y_old = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), streamline.shape[0])
-    # z_old = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), streamline.shape[0])
-
-    # x_new = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), pts)
-    # y_new = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), pts)
-    # z_new = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), pts)
-    
-    x_interp = CubicSpline(old_points, streamline[:, 0], bc_type='natural')
-    y_interp = CubicSpline(old_points, streamline[:, 1], bc_type='natural')
-    z_interp = CubicSpline(old_points, streamline[:, 2], bc_type='natural')
-    
-    resampled_streamline = np.vstack([
-        x_interp(new_points),
-        y_interp(new_points),
-        z_interp(new_points)
-    ]).T
-    
-    return resampled_streamline
-
-def choose_upORdownsample(args):
-    streamline, pts = args
-    if pts > len(streamline):
-        return interp_streamline((streamline, pts))
-    else:
-        return downsample((streamline, pts))
 
 @DATASETS.register_module()
 class single_streamline_TrInF(Dataset):
@@ -228,7 +189,7 @@ class single_streamline_TrInF(Dataset):
         pts = self.points_per_streamline
         x = [(streamline, pts) for streamline in self.streamlines]
         with Pool(processes=os.cpu_count()) as pool:
-            resampled_streamlines = pool.map(choose_upORdownsample, x)
+            resampled_streamlines = pool.map(choose_upORdownsample_streamline, x)
         resampled_streamlines = np.array(resampled_streamlines)
 
         if self.subset != 'testset':

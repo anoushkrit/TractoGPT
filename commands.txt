@@ -1,4 +1,4 @@
 
 cd /storage/anoushkrit/github/TractoGPT
 conda activate tractogpt
-CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py --config cfgs/PointGPT-S/pretrain.yaml --exp_name pretrainv2
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py --config cfgs/TractoGPT-S/pretrain.yaml --exp_name pretrainv2

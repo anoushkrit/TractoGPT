@@ -11,9 +11,9 @@ from torch.utils.data import Dataset
 from scipy.interpolate import CubicSpline
 from multiprocessing import Pool, cpu_count, set_start_method
 from dipy.tracking.distances import approx_polygon_track as apt
-sys.path.append('./TractoGPT/')
 from utils.config import *
 from utils.logger import *
+from utils.streamline_ops import *
 from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
 import gc, pickle
 import copy
@@ -23,123 +23,6 @@ import tracemalloc
 from .build import DATASETS
 # tracemalloc.start()
 #%%
-def downsample(args):
-    streamline, pts = args
-    streamline = apt(streamline,.1)
-    if len(streamline) != pts: 
-        resampled_streamline = interp_streamline((streamline, pts))
-    else:
-        resampled_streamline = streamline
-    return resampled_streamline
-
-def interp_streamline(args):
-    streamline, pts = args
-    old_points = np.linspace(0, 1, streamline.shape[0])
-    new_points = np.linspace(0, 1, pts)
-
-    # x_old = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), streamline.shape[0])
-    # y_old = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), streamline.shape[0])
-    # z_old = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), streamline.shape[0])
-
-    # x_new = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), pts)
-    # y_new = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), pts)
-    # z_new = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), pts)
-    
-    x_interp = CubicSpline(old_points, streamline[:, 0], bc_type='natural')
-    y_interp = CubicSpline(old_points, streamline[:, 1], bc_type='natural')
-    z_interp = CubicSpline(old_points, streamline[:, 2], bc_type='natural')
-    
-    resampled_streamline = np.vstack([
-        x_interp(new_points),
-        y_interp(new_points),
-        z_interp(new_points)
-    ]).T
-    
-    return resampled_streamline
-
-def choose_upORdownsample(args):
-    streamline, pts = args
-    if pts > len(streamline):
-        return interp_streamline((streamline, pts))
-    else:
-        return downsample((streamline, pts))
-    
-def create_clusters_subject(args):
-    data, subject_id, min_threshold_per_cluster, test = args
-
-    cluster_id_to_idx_mapping = {}
-    cluster_id_to_idx_mapping['L1'] = {}
-    for i in range(len(data['cluster_ids_l1'])):
-        cluster_id_to_idx_mapping['L1'][data['cluster_ids_l1'][i]] = i
-    cluster_id_to_idx_mapping['L2'] = {}
-    for i in range(len(data['cluster_ids_l2'])):
-        cluster_id_to_idx_mapping['L2'][data['cluster_ids_l2'][i]] = i
-    cluster_id_to_idx_mapping['L3'] = {}
-    for i in range(len(data['cluster_ids_l3'])):
-        cluster_id_to_idx_mapping['L3'][data['cluster_ids_l3'][i]] = i
-    
-    clusters = []
-    pc_cluster_labels = []
-    included_streamlines = np.zeros(len(data['label'])) # none included here
-    cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
-
-    cluster_ids_l2 = []
-    for cluster_id in cluster_ids_l3[cluster_count_l3 <  min_threshold_per_cluster]:
-        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id]])
-    cluster_ids_l2 = np.unique(cluster_ids_l2)
-    cluster_count_l2 = np.zeros(len(cluster_ids_l2))
-    for i,cluster_id in enumerate(cluster_ids_l2):
-        cluster_count_l2[i] = len(np.where(data['cluster_ids_l2'] == cluster_id)[0])
-    
-    cluster_ids_l1 = []
-    for cluster_id in cluster_ids_l2[cluster_count_l2 <  min_threshold_per_cluster]:
-        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id]])
-    cluster_ids_l1 = np.unique(cluster_ids_l1)
-    cluster_count_l1 = np.zeros(len(cluster_ids_l1))
-    for i,cluster_id in enumerate(cluster_ids_l1):
-        cluster_count_l1[i] = len(np.where(data['cluster_ids_l1'] == cluster_id)[0])
-    
-    for cluster_id in cluster_ids_l1:
-        cluster_streamline_idx = np.where(data['cluster_ids_l1'] == cluster_id)[0]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l2:
-        cluster_streamline_idx = np.where(data['cluster_ids_l2'] == cluster_id)[0]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l3:
-        cluster_streamline_idx = np.where(data['cluster_ids_l3'] == cluster_id)[0]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< min_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    return (clusters, pc_cluster_labels)
-
 def load_data(args):
     # current, peak = tracemalloc.get_traced_memory()
     # print(f'current memory usage at start of load_data is {current / 10**6}MB; Peak was {peak / 10**6}MB')
@@ -160,7 +43,7 @@ def load_data(args):
     del data
     # print(2)
 
-    cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
+    cluster, pc_cluster_labels = create_clusters_QBX_3L_per_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
     subject_data['cluster_ids_l1'] = None
     subject_data['cluster_ids_l2'] = None
     subject_data['cluster_ids_l3'] = None
@@ -180,7 +63,7 @@ def load_data(args):
     os.makedirs(output_dir, exist_ok=True)
     inp = [(subject_data['streamlines'][i], pts_per_streamline) for j in range(len(subject_data['streamlines']))]
     with Pool(20) as p:
-        resampled_streamlines = p.map(choose_upORdownsample, inp)
+        resampled_streamlines = p.map(choose_upORdownsample_streamline, inp)
     
     resampled_streamlines = np.array(resampled_streamlines)
     # Directly write to memmap
@@ -384,7 +267,7 @@ class goback_3L_streamline_TrInF(Dataset):
         with Pool(5) as p:
             for i, subject in enumerate(subjects):
                 inp = [(data[i][4][j], self.config.pts_per_streamline) for j in range(len(data[i][4]))]
-                resampled_streamlines = p.map(choose_upORdownsample, inp)
+                resampled_streamlines = p.map(choose_upORdownsample_streamline, inp)
                 
                 resampled_streamlines = np.array(resampled_streamlines)
                 # Directly write to memmap

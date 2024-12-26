@@ -259,7 +259,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
                             logger=logger)
                         builder.save_checkpoint(
                             base_model, optimizer, epoch, metrics, best_metrics_vote, 'ckpt-best_vote', args, logger=logger)
-
+    if train_writer is not None:    
         train_writer.close()
     if val_writer is not None:
         val_writer.close()
@@ -434,6 +434,9 @@ def validate_vote(base_model, test_dataloader, epoch, val_writer, args, config, 
 def test_net(args, config):
     logger = get_logger(args.log_name)
     print_log('Tester start ... ', logger=logger)
+    if config.dataset.test.others.bs == 1:
+        config.dataset.test.others.bs = 256
+        print_log('Change test batch size to 256 because it was 1', logger=logger)
     _, test_dataloader = builder.dataset_builder(args, config.dataset.test)
     base_model = builder.model_builder(config.model)
     # load checkpoints
@@ -517,7 +520,7 @@ def test(base_model, test_dataloader, args, config, logger=None):
 
 
         model = args.config.split('/')[-2] # PointGPT-M or PointGPT-S
-        pkl_path = f'predictions_new/{args.exp_name}/pkls/test_pred__{dataset_name}__{model}.pkl'
+        pkl_path = f'predictions_new/{args.exp_name}/{dataset_name}/pkls/test_pred__{model}.pkl'
         os.makedirs(os.path.dirname(pkl_path), exist_ok=True)
         if 'streamline' in dataset_name:
             with open(pkl_path, 'wb') as f:

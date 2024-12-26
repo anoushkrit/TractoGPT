@@ -39,4 +39,6 @@ class AverageMeter(object):
                 self._sum[i] / self._count[i] for i in range(self.n_items)
             ]
         else:
+            if self._count[idx] == 0:
+                return 0
             return self._sum[idx] / self._count[idx]

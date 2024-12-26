@@ -14,7 +14,7 @@ subject_blocks=(
     "subject_ids: ['sub-1209', 'sub-1232', 'sub-1263', 'sub-1006']"
 )
 
-base_model_command="CUDA_VISIBLE_DEVICES=1 python main.py --num_workers 40 --config cfgs/PointGPT-M/finetune_single_streamline_105HCP_23.yaml --test --exp_name error_trial --ckpts experiments/105HCP/finetune_single_streamline_105HCP_23/PointGPT-M/single_streamline_23_500/ckpt-best.pth"
+base_model_command="CUDA_VISIBLE_DEVICES=1 python main.py --num_workers 40 --config cfgs/TractoGPT-M/finetune_single_streamline_105HCP_23.yaml --test --exp_name error_trial --ckpts experiments/105HCP/finetune_single_streamline_105HCP_23/TractoGPT-M/single_streamline_23_500/ckpt-best.pth"
 dice_score_command="python dice_score_scripts/dice_score_single_streamline_105HCP.py"
 # Loop through each subject_ids block
 for i in "${!subject_blocks[@]}"

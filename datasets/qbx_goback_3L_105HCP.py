@@ -21,87 +21,6 @@ from collections import defaultdict
 import os
 from .build import DATASETS
 
-#%%
-def create_clusters_subject(args):
-    data, subject_id, streamline_threshold_per_cluster, test = args
-
-    cluster_id_to_idx_mapping = {
-        'L1': defaultdict(list),
-        'L2': defaultdict(list),
-        'L3': defaultdict(list),
-    }
-
-    for idx, cid in enumerate(data['cluster_ids_l1']):
-        cluster_id_to_idx_mapping['L1'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l2']):
-        cluster_id_to_idx_mapping['L2'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l3']):
-        cluster_id_to_idx_mapping['L3'][cid].append(idx)
-    
-    included_streamlines = np.zeros(len(data['label'])) # none included here
-    
-    clusters = []
-    pc_cluster_labels = []
-    cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
-
-    cluster_ids_l2 = []
-    for cluster_id in cluster_ids_l3[cluster_count_l3 <  streamline_threshold_per_cluster]:
-        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id][0]])
-    cluster_ids_l2 = np.unique(cluster_ids_l2)
-    cluster_count_l2 = np.zeros(len(cluster_ids_l2))
-    for i,cluster_id in enumerate(cluster_ids_l2):
-        cluster_count_l2[i] = len(cluster_id_to_idx_mapping['L2'][cluster_id])
-    
-    cluster_ids_l1 = []
-    for cluster_id in cluster_ids_l2[cluster_count_l2 <  streamline_threshold_per_cluster]:
-        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id][0]])
-    cluster_ids_l1 = np.unique(cluster_ids_l1)
-    cluster_count_l1 = np.zeros(len(cluster_ids_l1))
-    for i,cluster_id in enumerate(cluster_ids_l1):
-        cluster_count_l1[i] = len(cluster_id_to_idx_mapping['L1'][cluster_id])
-    
-    for cluster_id in cluster_ids_l1:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L1'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l2:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L2'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l3:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L3'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    return (clusters, pc_cluster_labels)
 def load_data(args):
     pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test = args
     level = 3
@@ -123,7 +42,7 @@ def load_data(args):
     del data
     gc.collect()
     
-    cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
+    cluster, pc_cluster_labels = create_clusters_QBX_3L_per_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
 
     pc_cluster = np.zeros((len(cluster), pts_per_sample, 3))
     for i in range(len(cluster)):
@@ -244,8 +163,10 @@ class qbx_goback_3L_105HCP(Dataset):
 
     def create_custom_batches(self):
         unique_labels, label_counts = np.unique(self.pc_cluster_labels, return_counts=True)
+        # print(unique_labels, label_counts)
         batch_size = self.samples_per_class_per_batch*len(unique_labels)
         num_batches = max(int(min(label_counts)//self.samples_per_class_per_batch), self.min_batches)
+        print_log(f'Creating {num_batches} batches of size {batch_size}', logger='qbx_goback_3L_105HCP')
         self.custom_batches = np.zeros((num_batches, batch_size), dtype=int)
 
         for i, label in enumerate(unique_labels):

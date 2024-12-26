@@ -49,7 +49,7 @@ def to_categorical(y, num_classes):
 def parse_args():
     parser = argparse.ArgumentParser('Model')
     parser.add_argument('--model', type=str, default='pt')
-    parser.add_argument('--model_name', type=str, default='PointGPT_S', choices=['PointGPT_S', 'PointGPT_B', 'PointGPT_L'])
+    parser.add_argument('--model_name', type=str, default='TractoGPT_S', choices=['TractoGPT_S', 'TractoGPT_B', 'TractoGPT_L'])
     parser.add_argument('--batch_size', type=int, default=32, # 16, 32
                         help='batch Size during training')
     parser.add_argument('--epoch', default=300, type=int, help='epoch to run')
@@ -77,17 +77,17 @@ def parse_args():
     return parser.parse_args()
 
 def get_model_loss(MODEL, args, num_part):
-    if args.model_name == 'PointGPT_S':
+    if args.model_name == 'TractoGPT_S':
         classifier = MODEL.get_model(num_part, trans_dim=384, depth=12, drop_path_rate=0.1, num_heads=6, decoder_depth=4, group_size=32, num_group=128, prop_dim=1024, label_dim1=512, label_dim2=256, encoder_dims=384)
         classifier = classifier.cuda()
         criterion = MODEL.get_loss().cuda()
         classifier.apply(inplace_relu)  
-    elif args.model_name == 'PointGPT_B':
+    elif args.model_name == 'TractoGPT_B':
         classifier = MODEL.get_model(num_part, trans_dim=768, depth=12, drop_path_rate=0.1, num_heads=12, decoder_depth=4, group_size=32, num_group=128, prop_dim=2048, label_dim1=1024, label_dim2=512, encoder_dims=768)
         classifier = classifier.cuda()
         criterion = MODEL.get_loss().cuda()
         classifier.apply(inplace_relu)  
-    elif args.model_name == 'PointGPT_L':
+    elif args.model_name == 'TractoGPT_L':
         classifier = MODEL.get_model(num_part, trans_dim=1024, depth=24, drop_path_rate=0.1, num_heads=16, decoder_depth=4, group_size=32, num_group=128, prop_dim=2048, label_dim1=1024, label_dim2=512, encoder_dims=1024)
         classifier = classifier.cuda()
         criterion = MODEL.get_loss().cuda()

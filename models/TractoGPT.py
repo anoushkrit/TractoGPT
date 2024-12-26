@@ -50,65 +50,65 @@ import pickle
 #         frechet_distance = mu_diff_sq + trace_term
 #         return torch.mean(frechet_distance)
 
-class FrechetLoss(torch.nn.Module):
-    def __init__(self):
-        super(FrechetLoss, self).__init__()
+# class FrechetLoss(torch.nn.Module):
+#     def __init__(self):
+#         super(FrechetLoss, self).__init__()
     
-    def minkowski_distance(self, exp_data, num_data, p):
-        # exp_data: (m, d)
-        # num_data: (n, d)
+#     def minkowski_distance(self, exp_data, num_data, p):
+#         # exp_data: (m, d)
+#         # num_data: (n, d)
 
-        # Compute pairwise Minkowski distance
-        # exp_data[:, None, :] creates (m, 1, d), num_data[None, :, :] creates (1, n, d)
-        diff = torch.abs(exp_data[:, None, :] - num_data[None, :, :])  # Shape: (m, n, d)
-        dist = torch.sum(diff**p, dim=2) ** (1/p)  # Minkowski distance, Shape: (m, n)
+#         # Compute pairwise Minkowski distance
+#         # exp_data[:, None, :] creates (m, 1, d), num_data[None, :, :] creates (1, n, d)
+#         diff = torch.abs(exp_data[:, None, :] - num_data[None, :, :])  # Shape: (m, n, d)
+#         dist = torch.sum(diff**p, dim=2) ** (1/p)  # Minkowski distance, Shape: (m, n)
 
-        return dist
-    def forward(self, generated, ground_truth):
-        """
-        code copied from similaritymeasures library
-        frechet_dist
+#         return dist
+#     def forward(self, generated, ground_truth):
+#         """
+#         code copied from similaritymeasures library
+#         frechet_dist
 
-        n = len(exp_data)
-        m = len(num_data)
-        c = distance.cdist(exp_data, num_data, metric='minkowski', p=p)
-        ca = np.ones((n, m))
-        ca = np.multiply(ca, -1)
-        ca[0, 0] = c[0, 0]
-        for i in range(1, n):
-            ca[i, 0] = max(ca[i-1, 0], c[i, 0])
-        for j in range(1, m):
-            ca[0, j] = max(ca[0, j-1], c[0, j])
-        for i in range(1, n):
-            for j in range(1, m):
-                ca[i, j] = max(min(ca[i-1, j], ca[i, j-1], ca[i-1, j-1]),
-                            c[i, j])
-        return ca[n-1, m-1]
-        """
-        B = generated.size(0)
-        frechet_distance = torch.zeros(B, device=generated.device)
-        for b in range(B):
+#         n = len(exp_data)
+#         m = len(num_data)
+#         c = distance.cdist(exp_data, num_data, metric='minkowski', p=p)
+#         ca = np.ones((n, m))
+#         ca = np.multiply(ca, -1)
+#         ca[0, 0] = c[0, 0]
+#         for i in range(1, n):
+#             ca[i, 0] = max(ca[i-1, 0], c[i, 0])
+#         for j in range(1, m):
+#             ca[0, j] = max(ca[0, j-1], c[0, j])
+#         for i in range(1, n):
+#             for j in range(1, m):
+#                 ca[i, j] = max(min(ca[i-1, j], ca[i, j-1], ca[i-1, j-1]),
+#                             c[i, j])
+#         return ca[n-1, m-1]
+#         """
+#         B = generated.size(0)
+#         frechet_distance = torch.zeros(B, device=generated.device)
+#         for b in range(B):
 
-            exp_data = generated[b]
-            num_data = ground_truth[b]
-            print(exp_data.shape, num_data.shape)
-            n = len(exp_data)
-            m = len(num_data)
-            c = self.minkowski_distance(exp_data, num_data, 2)
-            ca = torch.ones((n, m), device=generated.device)
-            ca = torch.mul(ca, -1)
-            ca[0, 0] = c[0, 0]
-            for i in range(1, n):
-                ca[i, 0] = max(ca[i-1, 0], c[i, 0])
-            for j in range(1, m):
-                ca[0, j] = max(ca[0, j-1], c[0, j])
-            for i in range(1, n):
-                for j in range(1, m):
-                    ca[i, j] = max(min(ca[i-1, j], ca[i, j-1], ca[i-1, j-1]),
-                                c[i, j])
-            frechet_distance[b] = ca[n-1, m-1]
+#             exp_data = generated[b]
+#             num_data = ground_truth[b]
+#             print(exp_data.shape, num_data.shape)
+#             n = len(exp_data)
+#             m = len(num_data)
+#             c = self.minkowski_distance(exp_data, num_data, 2)
+#             ca = torch.ones((n, m), device=generated.device)
+#             ca = torch.mul(ca, -1)
+#             ca[0, 0] = c[0, 0]
+#             for i in range(1, n):
+#                 ca[i, 0] = max(ca[i-1, 0], c[i, 0])
+#             for j in range(1, m):
+#                 ca[0, j] = max(ca[0, j-1], c[0, j])
+#             for i in range(1, n):
+#                 for j in range(1, m):
+#                     ca[i, j] = max(min(ca[i-1, j], ca[i, j-1], ca[i-1, j-1]),
+#                                 c[i, j])
+#             frechet_distance[b] = ca[n-1, m-1]
         
-        return torch.mean(frechet_distance)
+#         return torch.mean(frechet_distance)
 
 class STN3d(nn.Module):
     def __init__(self, channel):
@@ -396,74 +396,74 @@ class Group(nn.Module):
         return neighborhood, center
 
 
-# Transformers
-class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
-        self.drop = nn.Dropout(drop)
+# # Transformers
+# class Mlp(nn.Module):
+#     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+#         super().__init__()
+#         out_features = out_features or in_features
+#         hidden_features = hidden_features or in_features
+#         self.fc1 = nn.Linear(in_features, hidden_features)
+#         self.act = act_layer()
+#         self.fc2 = nn.Linear(hidden_features, out_features)
+#         self.drop = nn.Dropout(drop)
 
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        x = self.drop(x)
-        return x
-
-
-class Attention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        self.scale = qk_scale or head_dim ** -0.5
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x):
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C //
-                                  self.num_heads).permute(2, 0, 3, 1, 4)
-        # make torchscript happy (cannot use tensor as tuple)
-        q, k, v = qkv[0], qkv[1], qkv[2]
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
+#     def forward(self, x):
+#         x = self.fc1(x)
+#         x = self.act(x)
+#         x = self.drop(x)
+#         x = self.fc2(x)
+#         x = self.drop(x)
+#         return x
 
 
-class Block(nn.Module):
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
-        super().__init__()
-        self.norm1 = norm_layer(dim)
+# class Attention(nn.Module):
+#     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+#         super().__init__()
+#         self.num_heads = num_heads
+#         head_dim = dim // num_heads
+#         self.scale = qk_scale or head_dim ** -0.5
+#         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+#         self.attn_drop = nn.Dropout(attn_drop)
+#         self.proj = nn.Linear(dim, dim)
+#         self.proj_drop = nn.Dropout(proj_drop)
 
-        self.drop_path = DropPath(
-            drop_path) if drop_path > 0. else nn.Identity()
-        self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
-                       act_layer=act_layer, drop=drop)
+#     def forward(self, x):
+#         B, N, C = x.shape
+#         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C //
+#                                   self.num_heads).permute(2, 0, 3, 1, 4)
+#         # make torchscript happy (cannot use tensor as tuple)
+#         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+#         attn = (q @ k.transpose(-2, -1)) * self.scale
+#         attn = attn.softmax(dim=-1)
+#         attn = self.attn_drop(attn)
 
-    def forward(self, x):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x
+#         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+#         x = self.proj(x)
+#         x = self.proj_drop(x)
+#         return x
+
+
+# class Block(nn.Module):
+#     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+#                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+#         super().__init__()
+#         self.norm1 = norm_layer(dim)
+
+#         self.drop_path = DropPath(
+#             drop_path) if drop_path > 0. else nn.Identity()
+#         self.norm2 = norm_layer(dim)
+#         mlp_hidden_dim = int(dim * mlp_ratio)
+#         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
+#                        act_layer=act_layer, drop=drop)
+
+#         self.attn = Attention(
+#             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+
+#     def forward(self, x):
+#         x = x + self.drop_path(self.attn(self.norm1(x)))
+#         x = x + self.drop_path(self.mlp(self.norm2(x)))
+#         return x
 
 
 class PositionEmbeddingCoordsSine(nn.Module):
@@ -651,10 +651,10 @@ class GPT_Transformer(nn.Module):
 
 
 @MODELS.register_module()
-class PointGPT(nn.Module):
+class TractoGPT(nn.Module):
     def __init__(self, config):
         super().__init__()
-        print_log(f'[PointGPT] ', logger='PointGPT')
+        print_log(f'[TractoGPT] ', logger='TractoGPT')
         self.config = config
         self.trans_dim = config.transformer_config.trans_dim
         self.GPT_Transformer = GPT_Transformer(config)
@@ -664,7 +664,7 @@ class PointGPT(nn.Module):
         self.weight_center = config.weight_center
 
         print_log(
-            f'[PointGPT] divide point cloud into G{self.num_group} x S{self.group_size} points ...', logger='PointGPT')
+            f'[TractoGPT] divide point cloud into G{self.num_group} x S{self.group_size} points ...', logger='TractoGPT')
         self.group_divider = Group(
             num_group=self.num_group, group_size=self.group_size)
 
@@ -979,13 +979,13 @@ class PointTransformer(nn.Module):
         if self.cls_method == 'm1' or self.cls_method == 'm2' or self.cls_method == 'm3' or self.cls_method == 'm4':
             mainS, pts = pts
         
-        i = np.random.choice(10,1)[0]
-        os.makedirs(f'patches/cluster/{i}', exist_ok=True)
-        with open(f'patches/cluster/{i}/before.pkl', 'wb') as f:
-            pickle.dump(pts[0], f)
+        # i = np.random.choice(10,1)[0]
+        # os.makedirs(f'patches/cluster/{i}', exist_ok=True)
+        # with open(f'patches/cluster/{i}/before.pkl', 'wb') as f:
+        #     pickle.dump(pts[0], f)
         neighborhood, center = self.group_divider(pts)
-        with open(f'patches/cluster/{i}/after.pkl', 'wb') as f:
-            pickle.dump(neighborhood[0], f)
+        # with open(f'patches/cluster/{i}/after.pkl', 'wb') as f:
+        #     pickle.dump(neighborhood[0], f)
         group_input_tokens = self.encoder(neighborhood)  # B G N
         # self.plot_3d_scatter(pts[0])
         B, L, _ = group_input_tokens.shape

@@ -383,6 +383,6 @@ if __name__ == "__main__":
 
     #%%
     #%%
-    best_model_path = "/home/ang/param-scratch/github/TractoGPT/experiments_TrInf/finetune_single_streamline_TrInF/PointGPT-M/single_streamline_TrInF_150_10000/pps256/ckpt-best.pth"
+    best_model_path = "/home/ang/param-scratch/github/TractoGPT/experiments_TrInf/finetune_single_streamline_TrInF/TractoGPT-M/single_streamline_TrInF_150_10000/pps256/ckpt-best.pth"
     model = torch.load_weights(best_model_path)
     pcd = model.predict("")

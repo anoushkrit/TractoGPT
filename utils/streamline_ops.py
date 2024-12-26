@@ -1,4 +1,6 @@
+import os 
 import numpy as np
+from pathlib import Path
 from dipy.io.streamline import load_trk
 from nibabel.streamlines.array_sequence import ArraySequence
 import plotly.graph_objects as go
@@ -7,10 +9,9 @@ from dipy.segment.clustering import QuickBundlesX, QuickBundles
 from dipy.segment.metric import (
     AveragePointwiseEuclideanMetric, SumPointwiseEuclideanMetric, CosineMetric)
 from dipy.segment.featurespeed import VectorOfEndpointsFeature, CenterOfMassFeature
+from dipy.tracking.distances import approx_polygon_track as apt
 # https://docs.dipy.org/stable/reference/dipy.segment.html#centerofmassfeature
-from pathlib import Path
-from collections import Counter
-import os 
+from collections import Counter, defaultdict
 from tqdm import tqdm
 from scipy.interpolate import CubicSpline
 
@@ -38,41 +39,6 @@ def get_total_points(tracks):
 
 def merge_tracks(tracks): 
     return
-
-def interpolate_streamline(tracks, pps, c = 3):
-    """
-    streamlines: list
-    pps: int (points per streamline)
-    c: channel is 3 
-    """
-    a = len(tracks)
-    resampled_tracks = np.zeros((a,pps,c))
-
-    # TODO: Multiprocessing this loop to speed up
-    for i,track in enumerate(tracks):
-        # old_points = np.linspace(0, 1, track.shape[0])
-        x_old = np.linspace(track[:, 0].min(), track[:, 0].max(), track.shape[0])
-        y_old = np.linspace(track[:, 1].min(), track[:, 1].max(), track.shape[0])
-        z_old = np.linspace(track[:, 2].min(), track[:, 2].max(), track.shape[0])
-
-        x_new = np.linspace(track[:, 0].min(), track[:, 0].max(), pps)
-        y_new = np.linspace(track[:, 1].min(), track[:, 1].max(), pps)
-        z_new = np.linspace(track[:, 2].min(), track[:, 2].max(), pps)
-
-        x_interp = CubicSpline(x_old, track[:, 0], bc_type='natural')
-        y_interp = CubicSpline(y_old, track[:, 1], bc_type='natural')
-        z_interp = CubicSpline(z_old, track[:, 2], bc_type='natural')
-        
-        # Resample streamline
-        resampled_track = np.vstack([
-            x_interp(x_new),
-            y_interp(y_new),
-            z_interp(z_new)
-        ]).T
-        
-        resampled_tracks[i] = resampled_track
-    return resampled_tracks
-
 
 def get_named_colors():
     named_colors = [
@@ -209,4 +175,149 @@ def load_HCP(tracts_directory):
     return tracks, labels
 
 
+def downsample_streamline(args):
+    streamline, pts = args
+    """
+    Input:
+        streamline: list of points
+        pts: number of points to downsample or upsample to
+    """
+    streamline = apt(streamline,.1)
+    if len(streamline) != pts: 
+        resampled_streamline = interpolate_streamline((streamline, pts))
+    else:
+        resampled_streamline = streamline
+    return resampled_streamline
 
+def interpolate_streamline(args):
+    streamline, pts = args
+    """
+    Input:
+        streamline: list of points
+        pts: number of points to downsample or upsample to
+    """
+
+    x_old = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), streamline.shape[0])
+    y_old = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), streamline.shape[0])
+    z_old = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), streamline.shape[0])
+
+    x_new = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), pts)
+    y_new = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), pts)
+    z_new = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), pts)
+    
+    x_interp = CubicSpline(x_old, streamline[:, 0], bc_type='natural')
+    y_interp = CubicSpline(y_old, streamline[:, 1], bc_type='natural')
+    z_interp = CubicSpline(z_old, streamline[:, 2], bc_type='natural')
+    
+    resampled_streamline = np.vstack([
+        x_interp(x_new),
+        y_interp(y_new),
+        z_interp(z_new)
+    ]).T
+    
+    return resampled_streamline
+
+def choose_upORdownsample_streamline(args):
+    streamline, pts = args
+    """
+    Input:
+        streamline: list of points
+        pts: number of points to downsample or upsample to
+    """
+    if pts > len(streamline):
+        return interpolate_streamline((streamline, pts))
+    else:
+        return downsample_streamline((streamline, pts))
+
+def create_clusters_QBX_3L_per_subject(args):
+    data, subject_id, streamline_threshold_per_cluster, test = args
+
+    """
+    Input:
+        data: dict containing cluster_ids_l1, cluster_ids_l2, cluster_ids_l3, label
+        subject_id: subject_id
+        streamline_threshold_per_cluster: threshold for minimum number of streamlines in a cluster
+        test: whether these clusters are for testset or not
+
+    Output:
+        clusters: list of list of streamlines
+        pc_cluster_labels: list of labels for each cluster
+    """
+
+    cluster_id_to_idx_mapping = {
+        'L1': defaultdict(list),
+        'L2': defaultdict(list),
+        'L3': defaultdict(list),
+    }
+
+    for idx, cid in enumerate(data['cluster_ids_l1']):
+        cluster_id_to_idx_mapping['L1'][cid].append(idx)
+
+    for idx, cid in enumerate(data['cluster_ids_l2']):
+        cluster_id_to_idx_mapping['L2'][cid].append(idx)
+
+    for idx, cid in enumerate(data['cluster_ids_l3']):
+        cluster_id_to_idx_mapping['L3'][cid].append(idx)
+    
+    included_streamlines = np.zeros(len(data['label'])) # none included here
+    
+    clusters = []
+    pc_cluster_labels = []
+    cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
+
+    cluster_ids_l2 = []
+    for cluster_id in cluster_ids_l3[cluster_count_l3 <  streamline_threshold_per_cluster]:
+        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id][0]])
+    cluster_ids_l2 = np.unique(cluster_ids_l2)
+    cluster_count_l2 = np.zeros(len(cluster_ids_l2))
+    for i,cluster_id in enumerate(cluster_ids_l2):
+        cluster_count_l2[i] = len(cluster_id_to_idx_mapping['L2'][cluster_id])
+    
+    cluster_ids_l1 = []
+    for cluster_id in cluster_ids_l2[cluster_count_l2 <  streamline_threshold_per_cluster]:
+        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id][0]])
+    cluster_ids_l1 = np.unique(cluster_ids_l1)
+    cluster_count_l1 = np.zeros(len(cluster_ids_l1))
+    for i,cluster_id in enumerate(cluster_ids_l1):
+        cluster_count_l1[i] = len(cluster_id_to_idx_mapping['L1'][cluster_id])
+    
+    for cluster_id in cluster_ids_l1:
+        cluster_streamline_idx = cluster_id_to_idx_mapping['L1'][cluster_id]
+        if included_streamlines[cluster_streamline_idx[0]] == 1:
+            continue
+        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
+            continue
+        included_streamlines[cluster_streamline_idx] = 1
+        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
+        label = u_labels[np.argmax(u_counts)]
+        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
+        clusters.append(cluster_streamline_idx)
+        pc_cluster_labels.append(label)
+
+    for cluster_id in cluster_ids_l2:
+        cluster_streamline_idx = cluster_id_to_idx_mapping['L2'][cluster_id]
+        if included_streamlines[cluster_streamline_idx[0]] == 1:
+            continue
+        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
+            continue
+        included_streamlines[cluster_streamline_idx] = 1
+        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
+        label = u_labels[np.argmax(u_counts)]
+        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
+        clusters.append(cluster_streamline_idx)
+        pc_cluster_labels.append(label)
+
+    for cluster_id in cluster_ids_l3:
+        cluster_streamline_idx = cluster_id_to_idx_mapping['L3'][cluster_id]
+        if included_streamlines[cluster_streamline_idx[0]] == 1:
+            continue
+        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
+            continue
+        included_streamlines[cluster_streamline_idx] = 1
+        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
+        label = u_labels[np.argmax(u_counts)]
+        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
+        clusters.append(cluster_streamline_idx)
+        pc_cluster_labels.append(label)
+
+    return (clusters, pc_cluster_labels)

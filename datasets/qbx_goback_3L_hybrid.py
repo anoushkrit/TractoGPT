@@ -1,108 +1,34 @@
-# %%
+# Standard libraries
 import sys
-import os,json
+import os
+import json
 import datetime
-import numpy as np
+import gc
+import pickle
+import copy
 from pathlib import Path
+from collections import defaultdict
+from multiprocessing import Pool, cpu_count, set_start_method
+import shutil
+
+# Third-party libraries
+import numpy as np
 import torch
 from blist import blist
 from tqdm import tqdm
 from torch.utils.data import Dataset
 from scipy.interpolate import CubicSpline
-from multiprocessing import Pool, cpu_count, set_start_method
-# from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
+from memory_profiler import profile
+
+# Project-specific imports
 sys.path.append('./TractoGPT/')
 from utils.config import *
 from utils.logger import *
 from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
-import gc, pickle
-import copy
-from memory_profiler import profile
-from collections import defaultdict
 from .build import DATASETS
-import shutil
+
 
 #%%
-def create_clusters_subject(args):
-    data, subject_id, streamline_threshold_per_cluster, test = args
-
-    cluster_id_to_idx_mapping = {
-        'L1': defaultdict(list),
-        'L2': defaultdict(list),
-        'L3': defaultdict(list),
-    }
-
-    for idx, cid in enumerate(data['cluster_ids_l1']):
-        cluster_id_to_idx_mapping['L1'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l2']):
-        cluster_id_to_idx_mapping['L2'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l3']):
-        cluster_id_to_idx_mapping['L3'][cid].append(idx)
-    
-    included_streamlines = np.zeros(len(data['label'])) # none included here
-    
-    clusters = []
-    pc_cluster_labels = []
-    cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
-
-    cluster_ids_l2 = []
-    for cluster_id in cluster_ids_l3[cluster_count_l3 <  streamline_threshold_per_cluster]:
-        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id][0]])
-    cluster_ids_l2 = np.unique(cluster_ids_l2)
-    cluster_count_l2 = np.zeros(len(cluster_ids_l2))
-    for i,cluster_id in enumerate(cluster_ids_l2):
-        cluster_count_l2[i] = len(cluster_id_to_idx_mapping['L2'][cluster_id])
-    
-    cluster_ids_l1 = []
-    for cluster_id in cluster_ids_l2[cluster_count_l2 <  streamline_threshold_per_cluster]:
-        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id][0]])
-    cluster_ids_l1 = np.unique(cluster_ids_l1)
-    cluster_count_l1 = np.zeros(len(cluster_ids_l1))
-    for i,cluster_id in enumerate(cluster_ids_l1):
-        cluster_count_l1[i] = len(cluster_id_to_idx_mapping['L1'][cluster_id])
-    
-    for cluster_id in cluster_ids_l1:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L1'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l2:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L2'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l3:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L3'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    return (clusters, pc_cluster_labels)
 def load_data(args):
     pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test = args
     level = 3
@@ -123,7 +49,7 @@ def load_data(args):
     del data_x
     del data
 
-    cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
+    cluster, pc_cluster_labels = create_clusters_QBX_3L_per_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
 
     pc_cluster = np.zeros((len(cluster), pts_per_sample, 3))
     for i in range(len(cluster)):
@@ -171,8 +97,8 @@ class qbx_goback_3L_hybrid(Dataset):
         """ path1 for 105HCP and path2 for TractoInferno """
         self.config = config
         self.data_path = config.data_path
-        self.raw_data_path1 = config.raw_data_path1
-        self.raw_data_path2 = config.raw_data_path2
+        self.raw_data_path_TrInF = config.raw_data_path_TrInF
+        self.raw_data_path_HCP = config.raw_data_path_HCP
         self.subset = config.subset
         self.data_path = os.path.join(self.data_path, self.subset)
         self.save_path = config.save_path
@@ -204,14 +130,14 @@ class qbx_goback_3L_hybrid(Dataset):
                 dataset='TractoInferno',
                 mapping=self.label_int_mapping,
                 save_path='/'.join(self.data_path.split('/')[:-1]),
-                raw_data_path=self.raw_data_path1,
+                raw_data_path=self.raw_data_path_TrInF,
                 subset=[TrInF_subset]
             )
             create_qbx_cluster_from_scratch_n_save(
                 dataset='105HCP',
                 mapping=self.label_int_mapping,
                 save_path='/'.join(self.data_path.split('/')[:-1]),
-                raw_data_path=self.raw_data_path2,
+                raw_data_path=self.raw_data_path_HCP,
                 subset=[self.subset]
             )
         # merge the two datasets

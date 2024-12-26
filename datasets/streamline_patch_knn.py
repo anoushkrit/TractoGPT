@@ -77,7 +77,7 @@ class StreamlinePatchKnn(Dataset):
     #     with open(f'experiments/class_frequency_{self.subset}.json', "w") as f:
     #         json.dump(class_freq, f)
 
-    def interp_streamline(self,streamline):
+    def interpolate_streamline(self,streamline):
         old_points = np.linspace(0, 1, streamline.shape[0])
         new_points = np.linspace(0, 1, self.points_per_streamline)
         
@@ -97,7 +97,7 @@ class StreamlinePatchKnn(Dataset):
         a,b,c = np.shape(self.streamlines)
 
         with Pool(processes=cpu_count()) as pool:
-            resampled_streamlines = pool.map(self.interp_streamline, self.streamlines)
+            resampled_streamlines = pool.map(self.interpolate_streamline, self.streamlines)
 
         resampled_streamlines = np.array(resampled_streamlines)
         return resampled_streamlines

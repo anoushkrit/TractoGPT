@@ -14,6 +14,7 @@ from dipy.tracking.distances import approx_polygon_track as apt
 sys.path.append('./TractoGPT/')
 from utils.config import *
 from utils.logger import *
+from utils.streamline_ops import *
 from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
 import gc, pickle
 import copy
@@ -22,128 +23,8 @@ from collections import defaultdict
 import shutil
 from .build import DATASETS
 
-#%%
-def downsample(args):
-    streamline, pts = args
-    streamline = apt(streamline,.1)
-    if len(streamline) != pts: 
-        resampled_streamline = interp_streamline((streamline, pts))
-    else:
-        resampled_streamline = streamline
-    return resampled_streamline
+#%%    
 
-def interp_streamline(args):
-    streamline, pts = args
-    old_points = np.linspace(0, 1, streamline.shape[0])
-    new_points = np.linspace(0, 1, pts)
-
-    # x_old = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), streamline.shape[0])
-    # y_old = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), streamline.shape[0])
-    # z_old = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), streamline.shape[0])
-
-    # x_new = np.linspace(streamline[:, 0].min(), streamline[:, 0].max(), pts)
-    # y_new = np.linspace(streamline[:, 1].min(), streamline[:, 1].max(), pts)
-    # z_new = np.linspace(streamline[:, 2].min(), streamline[:, 2].max(), pts)
-    
-    x_interp = CubicSpline(old_points, streamline[:, 0], bc_type='natural')
-    y_interp = CubicSpline(old_points, streamline[:, 1], bc_type='natural')
-    z_interp = CubicSpline(old_points, streamline[:, 2], bc_type='natural')
-    
-    resampled_streamline = np.vstack([
-        x_interp(new_points),
-        y_interp(new_points),
-        z_interp(new_points)
-    ]).T
-    
-    return resampled_streamline
-
-def choose_upORdownsample(args):
-    streamline, pts = args
-    if pts > len(streamline):
-        return interp_streamline((streamline, pts))
-    else:
-        return downsample((streamline, pts))
-    
-def create_clusters_subject(args):
-    data, subject_id, streamline_threshold_per_cluster, test = args
-
-    cluster_id_to_idx_mapping = {
-        'L1': defaultdict(list),
-        'L2': defaultdict(list),
-        'L3': defaultdict(list),
-    }
-
-    for idx, cid in enumerate(data['cluster_ids_l1']):
-        cluster_id_to_idx_mapping['L1'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l2']):
-        cluster_id_to_idx_mapping['L2'][cid].append(idx)
-
-    for idx, cid in enumerate(data['cluster_ids_l3']):
-        cluster_id_to_idx_mapping['L3'][cid].append(idx)
-    
-    included_streamlines = np.zeros(len(data['label'])) # none included here
-    
-    clusters = []
-    pc_cluster_labels = []
-    cluster_ids_l3, cluster_count_l3 = np.unique(data['cluster_ids_l3'], return_counts=True)
-
-    cluster_ids_l2 = []
-    for cluster_id in cluster_ids_l3[cluster_count_l3 <  streamline_threshold_per_cluster]:
-        cluster_ids_l2.append(data['cluster_ids_l2'][cluster_id_to_idx_mapping['L3'][cluster_id][0]])
-    cluster_ids_l2 = np.unique(cluster_ids_l2)
-    cluster_count_l2 = np.zeros(len(cluster_ids_l2))
-    for i,cluster_id in enumerate(cluster_ids_l2):
-        cluster_count_l2[i] = len(cluster_id_to_idx_mapping['L2'][cluster_id])
-    
-    cluster_ids_l1 = []
-    for cluster_id in cluster_ids_l2[cluster_count_l2 <  streamline_threshold_per_cluster]:
-        cluster_ids_l1.append(data['cluster_ids_l1'][cluster_id_to_idx_mapping['L2'][cluster_id][0]])
-    cluster_ids_l1 = np.unique(cluster_ids_l1)
-    cluster_count_l1 = np.zeros(len(cluster_ids_l1))
-    for i,cluster_id in enumerate(cluster_ids_l1):
-        cluster_count_l1[i] = len(cluster_id_to_idx_mapping['L1'][cluster_id])
-    
-    for cluster_id in cluster_ids_l1:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L1'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l2:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L2'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    for cluster_id in cluster_ids_l3:
-        cluster_streamline_idx = cluster_id_to_idx_mapping['L3'][cluster_id]
-        if included_streamlines[cluster_streamline_idx[0]] == 1:
-            continue
-        if test==False and len(cluster_streamline_idx)< streamline_threshold_per_cluster:
-            continue
-        included_streamlines[cluster_streamline_idx] = 1
-        u_labels, u_counts = np.unique(data['label'][cluster_streamline_idx], return_counts=True)
-        label = u_labels[np.argmax(u_counts)]
-        cluster_streamline_idx = [f'{subject_id}_{i}' for i in cluster_streamline_idx]
-        clusters.append(cluster_streamline_idx)
-        pc_cluster_labels.append(label)
-
-    return (clusters, pc_cluster_labels)
 def load_data(args):
     pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test, subject, pts_per_streamline, save_path, subset = args
     level = 3
@@ -161,7 +42,7 @@ def load_data(args):
     del data_x
     del data
 
-    cluster, pc_cluster_labels = create_clusters_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
+    cluster, pc_cluster_labels = create_clusters_QBX_3L_per_subject((subject_data, subject_id, streamline_threshold_per_cluster, test))
     subject_data['cluster_ids_l1'] = None
     subject_data['cluster_ids_l2'] = None
     subject_data['cluster_ids_l3'] = None
@@ -180,7 +61,7 @@ def load_data(args):
     os.makedirs(output_dir, exist_ok=True)
     inp = [(subject_data['streamlines'][i], pts_per_streamline) for j in range(len(subject_data['streamlines']))]
     with Pool(20) as p:
-        resampled_streamlines = p.map(choose_upORdownsample, inp)
+        resampled_streamlines = p.map(choose_upORdownsample_streamline, inp)
     
     resampled_streamlines = np.array(resampled_streamlines)
     # Directly write to memmap
@@ -226,6 +107,8 @@ class goback_3L_streamline_hybrid(Dataset):
     def __init__(self,config):
         self.config = config
         self.data_path = config.data_path
+        self.raw_data_path_TrInF = config.raw_data_path_TrInF
+        self.raw_data_path_HCP = config.raw_data_path_HCP
         self.subset = config.subset
         self.save_path = os.path.join(self.data_path, 'processed_data')
         if not os.path.exists(self.save_path):
@@ -251,8 +134,8 @@ class goback_3L_streamline_hybrid(Dataset):
         self.label_int_mapping = self.load_label_mapping()
 
         if not os.path.exists(self.data_path):
-            print_log(f'[DATASET] Data path {self.data_path} does not exist', logger='qbx_goback_3L_hybrid')
-            print_log(f'[DATASET] Creating QBX clusters', logger='qbx_goback_3L_hybrid')
+            print_log(f'[DATASET] Data path {self.data_path} does not exist', logger='goback_3L_streamline_hybrid')
+            print_log(f'[DATASET] Creating QBX clusters', logger='goback_3L_streamline_hybrid')
             if self.subset in ['train', 'test']:
                 TrInF_subset = self.subset+'set'
             else:
@@ -261,18 +144,18 @@ class goback_3L_streamline_hybrid(Dataset):
                 dataset='TractoInferno',
                 mapping=self.label_int_mapping,
                 save_path='/'.join(self.data_path.split('/')[:-1]),
-                raw_data_path=self.raw_data_path1,
+                raw_data_path=self.raw_data_path_TrInF,
                 subset=[TrInF_subset]
             )
             create_qbx_cluster_from_scratch_n_save(
                 dataset='105HCP',
                 mapping=self.label_int_mapping,
                 save_path='/'.join(self.data_path.split('/')[:-1]),
-                raw_data_path=self.raw_data_path2,
+                raw_data_path=self.raw_data_path_HCP,
                 subset=[self.subset]
             )
         # merge the two datasets
-        print_log(f'[DATASET] Merging the two datasets', logger='qbx_goback_3L_hybrid')
+        print_log(f'[DATASET] Merging the two datasets', logger='goback_3L_streamline_hybrid')
         if 'train' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'trainset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
             self.merge_folders(os.path.join('/'.join(self.data_path.split('/')[:-1]), 'train'), os.path.join('/'.join(self.data_path.split('/')[:-1]), 'trainset'))
         if 'val' in os.listdir('/'.join(self.data_path.split('/')[:-1])) and 'validset' in os.listdir('/'.join(self.data_path.split('/')[:-1])):
@@ -375,7 +258,7 @@ class goback_3L_streamline_hybrid(Dataset):
         
         # delete the folder_b
         shutil.rmtree(folder_b)
-        print_log(f"Contents of '{folder_b}' have been merged into '{folder_a}'.", logger='qbx_goback_3L_hybrid')
+        print_log(f"Contents of '{folder_b}' have been merged into '{folder_a}'.", logger='goback_3L_streamline_hybrid')
         gc.collect()
 
     def create_custom_batches(self):
@@ -421,7 +304,7 @@ class goback_3L_streamline_hybrid(Dataset):
         with Pool() as p:
             for i, subject in enumerate(subjects):
                 inp = [(data[i][4][j], self.config.pts_per_streamline) for j in range(len(data[i][4]))]
-                resampled_streamlines = p.map(choose_upORdownsample, inp)
+                resampled_streamlines = p.map(choose_upORdownsample_streamline, inp)
                 
                 resampled_streamlines = np.array(resampled_streamlines)
                 # Directly write to memmap

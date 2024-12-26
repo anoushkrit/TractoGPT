@@ -1,4 +1,6 @@
 NAME: goback_3L_streamline_hybrid
+raw_data_path_TrInF: /scratch/anoushkrit.scee.iitmandi/DATA/TractoInferno/derivatives/
+raw_data_path_HCP: /scratch/anoushkrit.scee.iitmandi/DATA/dMRI_data/105HCP/
 data_path: ./data/data_hybrid/qbx
 
 save_path: ./data/data_hybrid/qbx/processed_data

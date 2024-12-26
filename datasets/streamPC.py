@@ -28,16 +28,16 @@ def load_stream(trk_path):
     bundle_track = load_tractogram(str(trk_path), 'same', bbox_valid_check=False)
     return list(bundle_track.streamlines)
 
-def downsample(args):
+def downsample_streamline(args):
     streamline, pts = args
     streamline = apt(streamline,.1)
     if len(streamline) != pts: 
-        resampled_streamline = interp_streamline((streamline, pts))
+        resampled_streamline = interpolate_streamline((streamline, pts))
     else:
         resampled_streamline = streamline
     return resampled_streamline
 
-def interp_streamline(args):
+def interpolate_streamline(args):
     streamline, pts = args
     # old_points = np.linspace(0, 1, streamline.shape[0])
     # new_points = np.linspace(0, 1, pts)
@@ -62,10 +62,10 @@ def interp_streamline(args):
     
     return resampled_streamline
 
-def choose_upORdownsample(args):
+def choose_upORdownsample_streamline(args):
     streamline, pts = args
     if pts > len(streamline):
-        return interp_streamline((streamline, pts))
+        return interpolate_streamline((streamline, pts))
     else:
         return downsample((streamline, pts))
 
@@ -302,7 +302,7 @@ class streamPC(Dataset):
         pts = self.points_per_streamline
         x = [(streamline, pts) for streamline in self.streamlines]
         with Pool(processes=os.cpu_count()) as pool:
-            resampled_streamlines = pool.map(choose_upORdownsample, x)
+            resampled_streamlines = pool.map(choose_upORdownsample_streamline, x)
         resampled_streamlines = np.array(resampled_streamlines)
 
         with open(f'{self.root_path}/streamlineData_{self.subset}_{self.samples_per_class}_{self.sample_per_subject}/resampledStreamlines_{self.points_per_streamline}.pkl', 'wb') as f:
