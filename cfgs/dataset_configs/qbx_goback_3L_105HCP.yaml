@@ -10,4 +10,3 @@ samples_per_class_per_batch: 4
 use_resampled_streamline: False
 min_threshold_per_cluster: 10
 label_mapping_path: label_int_mappings/label_int_mapping_105HCP.json
-subject_ids: ['sub-1164', 'sub-1235', 'sub-1281', '802844']

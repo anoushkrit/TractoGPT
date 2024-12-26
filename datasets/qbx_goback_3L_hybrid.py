@@ -24,6 +24,7 @@ from memory_profiler import profile
 sys.path.append('./TractoGPT/')
 from utils.config import *
 from utils.logger import *
+from utils.streamline_ops import *
 from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
 from .build import DATASETS
 

@@ -1,28 +1,32 @@
-# %%
+# Standard libraries
 import sys
-import os,json
+import os
+import json
 import datetime
-import numpy as np
+import gc
+import pickle
+import copy
+from functools import partial
 from pathlib import Path
+from multiprocessing import Pool, cpu_count, set_start_method
+
+# Third-party libraries
+import numpy as np
 import torch
 from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
 from dipy.segment.fss import FastStreamlineSearch
 from dipy.io.streamline import load_tractogram
-from torch.utils.data import Dataset
-from scipy.interpolate import CubicSpline
-from multiprocessing import Pool, cpu_count, set_start_method
 from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
-from functools import partial
-# from dipy.se
 from dipy.tracking.distances import approx_polygon_track as apt
-# sys.path.append('../')
+from scipy.interpolate import CubicSpline
+from torch.utils.data import Dataset
+
+# Project-specific imports
 sys.path.append('./TractoGPT/')
 from utils.config import *
-import gc, pickle
-from dipy.tracking.streamline import select_random_set_of_streamlines
-import copy
 from .build import DATASETS
+
 
 
 def load_stream(trk_path):

@@ -1,25 +1,31 @@
-# %%
+# Standard libraries
 import sys
-import os,json
+import os
+import json
 import datetime
-import numpy as np
+import gc
+import pickle
+import copy
+from collections import defaultdict
 from pathlib import Path
-import torch
-from blist import blist
-from tqdm import tqdm
-from torch.utils.data import Dataset
-from scipy.interpolate import CubicSpline
 from multiprocessing import Pool, cpu_count, set_start_method
-# from dipy.tracking.streamline import select_random_set_of_streamlines, set_number_of_points
+
+# Third-party libraries
+import numpy as np
+import torch
+from tqdm import tqdm
+from blist import blist
+from scipy.interpolate import CubicSpline
+from torch.utils.data import Dataset
+from memory_profiler import profile
+
+# Project-specific imports
 from utils.config import *
 from utils.logger import *
+from utils.streamline_ops import *
 from utils.qbx_clustering import create_qbx_cluster_from_scratch_n_save
-import gc, pickle
-import copy
-from memory_profiler import profile
-from collections import defaultdict
-import os
 from .build import DATASETS
+
 
 def load_data(args):
     pth, use_resampled_streamline, pts_per_sample, streamline_threshold_per_cluster, test = args
