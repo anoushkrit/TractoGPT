@@ -4,3 +4,12 @@ White matter bundle segmentation is crucial for studying brain structural connec
 To address these challenges, we propose **TractoGPT**, a GPT-based architecture trained on streamline, cluster, and fusion data representations separately. TractoGPT is a fully-automatic, registration-free method that generalizes across datasets and retains shape information of the white matter bundles.
 
 Experiments also show that **TractoGPT**outperforms state-of-the-art methods on average DICE, Overlap and Overreach scores. We use TractoInferno and 105HCP datasets and validate generalization across datasets.
+
+## Prepare Data
+
+## Train Model 
+
+## Infer Model 
+
+## Metrics 
+
